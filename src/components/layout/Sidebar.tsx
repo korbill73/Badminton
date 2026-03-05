@@ -11,7 +11,8 @@ import {
     Settings,
     LogOut,
     ChevronRight,
-    Activity
+    Activity,
+    MoreHorizontal
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -30,54 +31,124 @@ const navItems = [
 
 export default function Sidebar() {
     const pathname = usePathname();
+    const [isMenuOpen, setIsMenuOpen] = React.useState(false);
 
     return (
-        <div className="flex flex-col h-screen w-64 bg-[#0f172a] text-slate-400 border-r border-slate-800">
-            <div className="p-6 flex items-center gap-3">
-                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">
-                    B
+        <>
+            {/* Desktop Sidebar */}
+            <div className="hidden lg:flex flex-col h-screen w-64 bg-[#0f172a] text-slate-400 border-r border-slate-800">
+                <div className="p-6 flex items-center gap-3">
+                    <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">
+                        B
+                    </div>
+                    <span className="text-white font-bold text-xl tracking-tight">EliteBadminton</span>
                 </div>
-                <span className="text-white font-bold text-xl tracking-tight">EliteBadminton</span>
+
+                <nav className="flex-1 px-4 py-4 space-y-1">
+                    {navItems.map((item) => {
+                        const isActive = pathname === item.href;
+                        return (
+                            <Link
+                                key={item.name}
+                                href={item.href}
+                                className={cn(
+                                    "flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors group",
+                                    isActive
+                                        ? "bg-blue-600/10 text-blue-500"
+                                        : "hover:bg-slate-800 hover:text-white"
+                                )}
+                            >
+                                <item.icon className={cn("w-5 h-5", isActive ? "text-blue-500" : "group-hover:text-white")} />
+                                <span>{item.name}</span>
+                                {isActive && <div className="ml-auto w-1.5 h-1.5 bg-blue-500 rounded-full" />}
+                            </Link>
+                        );
+                    })}
+                </nav>
+
+                <div className="p-4 mt-auto border-t border-slate-800">
+                    <div className="flex items-center gap-3 p-3 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer">
+                        <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white">
+                            JD
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-white truncate">홍길동 선수</p>
+                            <p className="text-xs text-slate-500 truncate">Pro Team</p>
+                        </div>
+                        <Settings className="w-4 h-4 hover:text-white" />
+                    </div>
+                    <button className="w-full flex items-center gap-3 px-3 py-3 mt-2 text-sm font-medium rounded-lg hover:bg-red-500/10 hover:text-red-500 transition-colors">
+                        <LogOut className="w-5 h-5" />
+                        <span>로그아웃</span>
+                    </button>
+                </div>
             </div>
 
-            <nav className="flex-1 px-4 py-4 space-y-1">
-                {navItems.map((item) => {
+            {/* Mobile Bottom Navigation */}
+            <div className="lg:hidden fixed bottom-6 left-4 right-4 z-[100] h-16 bg-[#0f172a]/90 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex items-center justify-around px-2">
+                {[...navItems.slice(0, 4)].map((item) => {
                     const isActive = pathname === item.href;
                     return (
                         <Link
                             key={item.name}
                             href={item.href}
                             className={cn(
-                                "flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors group",
-                                isActive
-                                    ? "bg-blue-600/10 text-blue-500"
-                                    : "hover:bg-slate-800 hover:text-white"
+                                "flex flex-col items-center justify-center gap-1 w-full h-full transition-all relative",
+                                isActive ? "text-blue-500" : "text-slate-500 active:scale-95"
                             )}
                         >
-                            <item.icon className={cn("w-5 h-5", isActive ? "text-blue-500" : "group-hover:text-white")} />
-                            <span>{item.name}</span>
-                            {isActive && <div className="ml-auto w-1.5 h-1.5 bg-blue-500 rounded-full" />}
+                            <item.icon className={cn("w-5 h-5", isActive && "animate-in zoom-in-75 duration-300")} />
+                            <span className="text-[9px] font-black uppercase tracking-tighter">{item.name}</span>
+                            {isActive && (
+                                <div className="absolute -top-1 w-1 h-1 bg-blue-500 rounded-full transition-all animate-in fade-in zoom-in duration-500" />
+                            )}
                         </Link>
                     );
                 })}
-            </nav>
 
-            <div className="p-4 mt-auto border-t border-slate-800">
-                <div className="flex items-center gap-3 p-3 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer">
-                    <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white">
-                        JD
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-white truncate">홍길동 선수</p>
-                        <p className="text-xs text-slate-500 truncate">Pro Team</p>
-                    </div>
-                    <Settings className="w-4 h-4 hover:text-white" />
-                </div>
-                <button className="w-full flex items-center gap-3 px-3 py-3 mt-2 text-sm font-medium rounded-lg hover:bg-red-500/10 hover:text-red-500 transition-colors">
-                    <LogOut className="w-5 h-5" />
-                    <span>로그아웃</span>
+                {/* Mobile More Button */}
+                <button
+                    onClick={() => setIsMenuOpen(!isMenuOpen)}
+                    className={cn(
+                        "flex flex-col items-center justify-center gap-1 w-full h-full transition-all relative",
+                        isMenuOpen ? "text-blue-500" : "text-slate-500 active:scale-95"
+                    )}
+                >
+                    <MoreHorizontal className="w-5 h-5" />
+                    <span className="text-[9px] font-black uppercase tracking-tighter">메뉴</span>
                 </button>
+
+                {/* Mobile Menu Overlay */}
+                {isMenuOpen && (
+                    <>
+                        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[-1] animate-in fade-in duration-300" onClick={() => setIsMenuOpen(false)} />
+                        <div className="absolute bottom-20 right-0 w-48 bg-[#0f172a] border border-slate-700 rounded-2xl p-2 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
+                            <div className="flex items-center gap-3 p-3 border-b border-slate-800 mb-2">
+                                <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-white text-xs">JD</div>
+                                <div className="min-w-0">
+                                    <p className="text-xs font-bold text-white truncate">홍길동 선수</p>
+                                </div>
+                            </div>
+                            <Link
+                                href="/performance"
+                                className="flex items-center gap-3 px-3 py-2.5 text-xs font-bold text-slate-400 hover:text-white rounded-lg"
+                                onClick={() => setIsMenuOpen(false)}
+                            >
+                                <Activity className="w-4 h-4" />
+                                <span>트레이닝 지표</span>
+                            </Link>
+                            <button className="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-bold text-slate-400 hover:text-white rounded-lg">
+                                <Settings className="w-4 h-4" />
+                                <span>설정</span>
+                            </button>
+                            <button className="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-bold text-red-400 hover:bg-red-500/10 rounded-lg">
+                                <LogOut className="w-4 h-4" />
+                                <span>로그아웃</span>
+                            </button>
+                        </div>
+                    </>
+                )}
             </div>
-        </div>
+        </>
     );
 }
