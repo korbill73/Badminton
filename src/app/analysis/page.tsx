@@ -152,7 +152,7 @@ export default function AnalysisArchivePage() {
                     {filteredMatches.map(match => (
                         <Link
                             key={match.id}
-                            href={`/analysis/${match.id}`}
+                            href={`/analysis/detail?id=${match.id}`}
                             className="group bg-white dark:bg-slate-900 rounded-[40px] border border-slate-100 dark:border-slate-800 p-8 hover:border-blue-500 hover:shadow-2xl hover:shadow-blue-100 dark:hover:shadow-blue-900/10 transition-all duration-500 flex flex-col gap-6"
                         >
                             <div className="flex justify-between items-start">

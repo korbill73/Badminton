@@ -147,7 +147,7 @@ export default function HomePage() {
               </div>
             ) : (
               recentMatches.map((match) => (
-                <Link key={match.id} href={`/analysis/${match.id}`}>
+                <Link key={match.id} href={`/analysis/detail?id=${match.id}`}>
                   <div className="group bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm hover:border-blue-500 hover:shadow-xl transition-all flex items-center justify-between cursor-pointer">
                     <div className="flex items-center gap-6">
                       <div className={cn(

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, use } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import YoutubePlayer from '@/components/match/YoutubePlayer';
@@ -13,13 +13,16 @@ import { BDMatch, BDPointLog, MomentumData } from '@/types';
 import { ChevronLeft, Share2, Download, Loader2, Trophy, Layout, RefreshCw } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 
 function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
 }
 
-export default function DynamicMatchDetailPage({ params }: { params: Promise<{ id: string }> }) {
-    const { id: matchId } = use(params);
+function MatchDetailContent() {
+    const searchParams = useSearchParams();
+    const matchId = searchParams.get('id');
     const [match, setMatch] = useState<BDMatch | null>(null);
     const [logs, setLogs] = useState<BDPointLog[]>([]);
     const [player, setPlayer] = useState<any>(null);
@@ -29,6 +32,7 @@ export default function DynamicMatchDetailPage({ params }: { params: Promise<{ i
     const [currentSet, setCurrentSet] = useState<number>(1);
 
     const fetchMatchData = async (showLoading = true) => {
+        if (!matchId) return;
         if (showLoading) setLoading(true);
         try {
             const { data: mData, error: mErr } = await supabase
@@ -63,18 +67,15 @@ export default function DynamicMatchDetailPage({ params }: { params: Promise<{ i
     };
 
     useEffect(() => {
-        fetchMatchData();
+        if (matchId) {
+            fetchMatchData();
+        }
     }, [matchId]);
 
-    /**
-     * IRONCLAD RECALCULATION ENGINE (v3 - Robust Constraint Handling)
-     * Rebuilds every set's score from absolute 0-0.
-     * Guarantees 1st point is ALWAYS 1-0/0-1.
-     */
     const syncAndRecalculateAll = async () => {
+        if (!matchId) return;
         setIsSyncing(true);
         try {
-            // 1. Fresh Fetch
             const { data: fresh, error } = await supabase
                 .from('bd_point_logs')
                 .select('*')
@@ -86,7 +87,6 @@ export default function DynamicMatchDetailPage({ params }: { params: Promise<{ i
                 return;
             }
 
-            // 2. Strict Timeline Sort
             const sorted = [...fresh].sort((a, b) => {
                 const timeA = a.video_timestamp ?? 0;
                 const timeB = b.video_timestamp ?? 0;
@@ -94,7 +94,6 @@ export default function DynamicMatchDetailPage({ params }: { params: Promise<{ i
                 return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
             });
 
-            // 3. Rebuild Scores (Set 1, 2, 3)
             const running = {
                 1: { me: 0, opp: 0 },
                 2: { me: 0, opp: 0 },
@@ -108,36 +107,28 @@ export default function DynamicMatchDetailPage({ params }: { params: Promise<{ i
 
                 const newScore = `${running[s].me}-${running[s].opp}`;
 
-                // CRITICAL FIX: To satisfy 'NOT NULL' constraints during upsert in some environments,
-                // we must provide all mandatory columns or ensure the DB allows partial updates.
-                // Including set_number and match_id explicitly fixes the reported crash.
                 return {
                     id: log.id,
-                    match_id: matchId,  // Required column fix
-                    set_number: s,      // Required column fix (ensures never null)
+                    match_id: matchId,
+                    set_number: s,
                     current_score: newScore,
-                    is_my_point: log.is_my_point, // Preserving original point owner
-                    point_type: log.point_type,   // Preserving original point type
-                    video_timestamp: log.video_timestamp // Preserving original timestamp
+                    is_my_point: log.is_my_point,
+                    point_type: log.point_type,
+                    video_timestamp: log.video_timestamp
                 };
             });
 
-            // 4. Persistence with detailed error capture
             if (updates.length > 0) {
                 const { error: upErr } = await supabase
                     .from('bd_point_logs')
                     .upsert(updates, { onConflict: 'id' });
-                if (upErr) {
-                    throw new Error(`${upErr.message} (Detail: ${upErr.details || 'none'})`);
-                }
+                if (upErr) throw upErr;
             }
 
-            // 5. Final Re-sync UI
             await fetchMatchData(false);
         } catch (err: any) {
             console.error('Ironclad Recalculation failed:', err);
-            const msg = err.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
-            alert(`점수 정산 중 오류 발생: ${msg === '{}' ? '데이터 무결성 제약 조건 위반 (DB Constraint)' : msg}`);
+            alert(`점수 정산 중 오류 발생: ${err.message}`);
         } finally {
             setIsSyncing(false);
         }
@@ -155,14 +146,15 @@ export default function DynamicMatchDetailPage({ params }: { params: Promise<{ i
     };
 
     const handleInsertLog = async (targetSet: number, insertTime: number) => {
+        if (!matchId) return;
         try {
             const { error: insErr } = await supabase
                 .from('bd_point_logs')
                 .insert([{
                     match_id: matchId,
                     set_number: targetSet,
-                    current_score: '0-0', // Temporary, sync will fix
-                    is_my_point: true,   // Default to winner
+                    current_score: '0-0',
+                    is_my_point: true,
                     point_type: 'smash_winner',
                     video_timestamp: insertTime
                 }]);
@@ -222,7 +214,6 @@ export default function DynamicMatchDetailPage({ params }: { params: Promise<{ i
         }
     };
 
-    // UI FILTER: MUST ALSO TREAT NULL AS SET 1
     const currentSetLogs = logs.filter(l => (l.set_number || 1) === currentSet);
 
     const momentumData: MomentumData[] = currentSetLogs.map((log, index) => {
@@ -248,10 +239,9 @@ export default function DynamicMatchDetailPage({ params }: { params: Promise<{ i
 
     return (
         <div className="space-y-6 max-w-[1920px] mx-auto px-4 bg-slate-50/30">
-            {/* Top Navigation */}
             <div className="flex items-center justify-between">
                 <Link
-                    href={`/tournaments/${match.tournament_id}`}
+                    href={`/tournaments/detail?id=${match.tournament_id}`}
                     className="flex items-center gap-2 text-slate-500 hover:text-blue-600 transition-colors"
                 >
                     <ChevronLeft className="w-4 h-4" />
@@ -275,7 +265,6 @@ export default function DynamicMatchDetailPage({ params }: { params: Promise<{ i
                 </div>
             </div>
 
-            {/* Match Title Section */}
             <div className="bg-white dark:bg-slate-900 rounded-[32px] border border-slate-200 dark:border-slate-800 p-8 shadow-sm">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
                     <div className="space-y-4">
@@ -284,11 +273,11 @@ export default function DynamicMatchDetailPage({ params }: { params: Promise<{ i
                                 {match.category} Match
                             </span>
                             <span className="text-xs font-black text-slate-400 tracking-tight">
-                                {match.match_date} • {match.tournament?.name}
+                                {match.match_date} · {match.tournament?.name}
                             </span>
                         </div>
                         <h1 className="text-4xl font-black text-slate-900 dark:text-white flex flex-wrap items-center gap-5">
-                            나 {match.category === 'doubles' && <span className="text-xl text-slate-400 font-bold">({match.partner?.name})</span>}
+                            나{match.category === 'doubles' && <span className="text-xl text-slate-400 font-bold">({match.partner?.name})</span>}
                             <span className="text-slate-200 font-normal italic text-2xl px-2">vs</span>
                             {match.opponent_1?.name} {match.opponent_2 && <span className="text-xl text-slate-400 font-bold">({match.opponent_2?.name})</span>}
                         </h1>
@@ -314,7 +303,6 @@ export default function DynamicMatchDetailPage({ params }: { params: Promise<{ i
 
             <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
                 <div className="xl:col-span-9 space-y-8">
-                    {/* Video Player & Logger */}
                     <div className="bg-white dark:bg-slate-900 rounded-[40px] p-2 border border-slate-100 dark:border-slate-800 shadow-2xl overflow-hidden">
                         {match.youtube_video_id ? (
                             <YoutubePlayer videoId={match.youtube_video_id} onPlayerReady={setPlayer} />
@@ -333,15 +321,13 @@ export default function DynamicMatchDetailPage({ params }: { params: Promise<{ i
                         currentSet={currentSet}
                         onSetChange={setCurrentSet}
                         initialScoreMe={(() => {
-                            const filteredLogs = logs.filter(l => (l.set_number || 1) === currentSet);
-                            const lastLog = filteredLogs[filteredLogs.length - 1];
+                            const lastLog = currentSetLogs[currentSetLogs.length - 1];
                             if (!lastLog) return 0;
                             const [me] = lastLog.current_score.split('-').map(Number);
                             return isNaN(me) ? 0 : me;
                         })()}
                         initialScoreOpp={(() => {
-                            const filteredLogs = logs.filter(l => (l.set_number || 1) === currentSet);
-                            const lastLog = filteredLogs[filteredLogs.length - 1];
+                            const lastLog = currentSetLogs[currentSetLogs.length - 1];
                             if (!lastLog) return 0;
                             const [, opp] = lastLog.current_score.split('-').map(Number);
                             return isNaN(opp) ? 0 : opp;
@@ -354,7 +340,6 @@ export default function DynamicMatchDetailPage({ params }: { params: Promise<{ i
                     </div>
                 </div>
 
-                {/* 점수표 (Scoreboard) Sidebar */}
                 <div className="xl:col-span-3 h-full">
                     <div className="bg-white dark:bg-slate-900 rounded-[40px] border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col h-[calc(100vh-100px)] sticky top-6">
                         <div className="p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50">
@@ -385,7 +370,7 @@ export default function DynamicMatchDetailPage({ params }: { params: Promise<{ i
                                 })}
                             </div>
                         </div>
-                        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                        <div className="flex-1 overflow-y-auto p-4">
                             <RallyTimeline
                                 logs={currentSetLogs}
                                 currentSet={currentSet}
@@ -406,5 +391,18 @@ export default function DynamicMatchDetailPage({ params }: { params: Promise<{ i
                 <TacticalDashboard logs={currentSetLogs} />
             </div>
         </div>
+    );
+}
+
+export default function DynamicMatchDetailPage() {
+    return (
+        <Suspense fallback={
+            <div className="h-[70vh] flex flex-col items-center justify-center gap-4 text-slate-400">
+                <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
+                <p className="font-bold text-sm text-slate-900">페이지를 준비하고 있습니다...</p>
+            </div>
+        }>
+            <MatchDetailContent />
+        </Suspense>
     );
 }

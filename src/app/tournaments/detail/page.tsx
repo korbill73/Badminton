@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, use } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
     ChevronLeft,
@@ -22,12 +22,13 @@ import { supabase } from '@/lib/supabase';
 import { BDTournament, BDMatch, BDPlayer } from '@/types';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 
 function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
 }
 
-// Utility to extract YouTube ID from dynamic inputs
 const extractYoutubeId = (input: string) => {
     if (!input) return null;
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
@@ -35,28 +36,26 @@ const extractYoutubeId = (input: string) => {
     return (match && match[2].length === 11) ? match[2] : input;
 };
 
-export default function TournamentDetailPage({ params }: { params: Promise<{ id: string }> }) {
-    const { id: tournamentId } = use(params);
+function TournamentDetailContent() {
+    const searchParams = useSearchParams();
+    const tournamentId = searchParams.get('id');
     const [tournament, setTournament] = useState<BDTournament | null>(null);
     const [matches, setMatches] = useState<BDMatch[]>([]);
     const [players, setPlayers] = useState<BDPlayer[]>([]);
     const [loading, setLoading] = useState(true);
 
-    // Modal states
     const [showAddModal, setShowAddModal] = useState(false);
     const [showTournamentEditModal, setShowTournamentEditModal] = useState(false);
     const [editingMatch, setEditingMatch] = useState<BDMatch | null>(null);
     const [isSuccess, setIsSuccess] = useState(false);
     const [submitting, setSubmitting] = useState(false);
 
-    // Tournament Edit states
     const [editTName, setEditTName] = useState('');
     const [editTLocation, setEditTLocation] = useState('');
     const [editTResult, setEditTResult] = useState('');
     const [editTStart, setEditTStart] = useState('');
     const [editTEnd, setEditTEnd] = useState('');
 
-    // Form states
     const [matchName, setMatchName] = useState('');
     const [category, setCategory] = useState<'singles' | 'doubles'>('singles');
     const [matchDate, setMatchDate] = useState(new Date().toISOString().split('T')[0]);
@@ -68,9 +67,9 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
     const [youtubeId, setYoutubeId] = useState('');
 
     const fetchData = async () => {
+        if (!tournamentId) return;
         setLoading(true);
         try {
-            // Fetch Tournament
             const { data: tData } = await supabase
                 .from('bd_tournaments')
                 .select('*')
@@ -85,30 +84,21 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                 setEditTEnd(tData.end_date);
             }
 
-            // Fetch Matches with Player info
             const { data: mData } = await supabase
                 .from('bd_matches')
                 .select(`
-          *,
-          opponent_1:bd_players!opponent_1_id(name),
-          opponent_2:bd_players!opponent_2_id(name),
-          partner:bd_players!partner_id(name)
-        `)
+                  *,
+                  opponent_1:bd_players!opponent_1_id(name),
+                  opponent_2:bd_players!opponent_2_id(name),
+                  partner:bd_players!partner_id(name)
+                `)
                 .eq('tournament_id', tournamentId)
                 .order('match_date', { ascending: false });
 
             if (mData) {
-                // Map the joined data to our interface
-                const formattedMatches = mData.map((m: any) => ({
-                    ...m,
-                    opponent_1: m.opponent_1,
-                    opponent_2: m.opponent_2,
-                    partner: m.partner
-                }));
-                setMatches(formattedMatches);
+                setMatches(mData);
             }
 
-            // Fetch all players for the dropdown
             const { data: pData } = await supabase
                 .from('bd_players')
                 .select('*')
@@ -123,11 +113,12 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
     };
 
     useEffect(() => {
-        fetchData();
+        if (tournamentId) fetchData();
     }, [tournamentId]);
 
     const handleUpdateTournament = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!tournamentId) return;
         setSubmitting(true);
         try {
             const { error } = await supabase
@@ -149,7 +140,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                 setShowTournamentEditModal(false);
             }, 1500);
         } catch (err: any) {
-            alert('대회 정보 수정 중 오류가 발생했습니다: ' + err.message);
+            alert('대회 정보 수정 중 오류 발생: ' + err.message);
         } finally {
             setSubmitting(false);
         }
@@ -172,7 +163,6 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
     const handleCloseModal = () => {
         setShowAddModal(false);
         setEditingMatch(null);
-        // Reset form
         setMatchName('');
         setOpponent1Id('');
         setOpponent2Id('');
@@ -184,6 +174,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
 
     const handleAddMatch = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!tournamentId) return;
         setSubmitting(true);
 
         try {
@@ -225,7 +216,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                 handleCloseModal();
             }, 1500);
         } catch (err: any) {
-            alert('경기 정보 저장 중 오류가 발생했습니다: ' + err.message);
+            alert('경기 정보 저장 중 오류 발생: ' + err.message);
         } finally {
             setSubmitting(false);
         }
@@ -242,7 +233,6 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
 
     return (
         <div className="space-y-8">
-            {/* Header & Back Link */}
             <div className="space-y-4">
                 <Link
                     href="/tournaments"
@@ -299,7 +289,6 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                 </div>
             </div>
 
-            {/* Match Stats (Mini) */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Matches</p>
@@ -315,7 +304,6 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                 </div>
             </div>
 
-            {/* Match List */}
             <div className="space-y-4">
                 <h2 className="text-xl font-bold flex items-center gap-2">
                     경기 대진표
@@ -373,9 +361,9 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                                                 </span>
                                             </td>
                                             <td className="px-6 py-5 text-center">
-                                                <Link href={`/analysis/${m.id}`} className="block">
+                                                <Link href={`/analysis/detail?id=${m.id}`} className="block">
                                                     <span className="text-base font-bold text-slate-800 dark:text-slate-200 group-hover:text-blue-600 transition-colors">
-                                                        나 {m.category === 'doubles' && <span className="text-xs text-slate-400 font-medium">({m.partner?.name})</span>}
+                                                        나{m.category === 'doubles' && <span className="text-xs text-slate-400 font-medium">({m.partner?.name})</span>}
                                                         <span className="text-slate-400 font-normal px-1.5 opacity-50">vs</span>
                                                         {m.opponent_1?.name} {m.opponent_2 && <span className="text-xs text-slate-400 font-medium">({m.opponent_2?.name})</span>}
                                                     </span>
@@ -405,7 +393,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                                                     >
                                                         <Edit2 className="w-4.5 h-4.5" />
                                                     </button>
-                                                    <Link href={`/analysis/${m.id}`} className="p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-300 hover:text-slate-900 transition-all active:scale-95 border border-transparent hover:border-slate-200">
+                                                    <Link href={`/analysis/detail?id=${m.id}`} className="p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-300 hover:text-slate-900 transition-all active:scale-95 border border-transparent hover:border-slate-200">
                                                         <ChevronRight className="w-6 h-6" />
                                                     </Link>
                                                 </div>
@@ -419,7 +407,6 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                 )}
             </div>
 
-            {/* Add Match Modal */}
             {showAddModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden animate-in zoom-in duration-300">
@@ -429,7 +416,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                                     <CheckCircle2 className="w-12 h-12" />
                                 </div>
                                 <h2 className="text-2xl font-black">경기 등록 완료!</h2>
-                                <p className="text-slate-500 font-medium">새로운 경기가 성공적으로 대회 기록에 추가되었습니다.</p>
+                                <p className="text-slate-500 font-medium">새로운 경기가 성공적으로 저장 기록에 추가되었습니다.</p>
                             </div>
                         ) : (
                             <>
@@ -444,7 +431,6 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                                 </div>
 
                                 <form onSubmit={handleAddMatch} className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    {/* Left Column */}
                                     <div className="space-y-5">
                                         <div>
                                             <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">경기명 (예: 결승, 예선 등)</label>
@@ -534,7 +520,6 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                                         </div>
                                     </div>
 
-                                    {/* Right Column */}
                                     <div className="space-y-5">
                                         <div>
                                             <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">최종 세트 스코어</label>
@@ -597,7 +582,6 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                 </div>
             )}
 
-            {/* Tournament Edit Modal */}
             {showTournamentEditModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden animate-in zoom-in duration-300">
@@ -694,3 +678,15 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
     );
 }
 
+export default function TournamentDetailPage() {
+    return (
+        <Suspense fallback={
+            <div className="h-[60vh] flex flex-col items-center justify-center text-slate-400 gap-4">
+                <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
+                <p className="font-medium">대회 정보를 준비하고 있습니다...</p>
+            </div>
+        }>
+            <TournamentDetailContent />
+        </Suspense>
+    );
+}

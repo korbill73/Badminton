@@ -197,7 +197,7 @@ export default function TournamentsPage() {
                                             </div>
                                         </td>
                                         <td className="px-10 py-6">
-                                            <Link href={`/tournaments/${t.id}`} className="block text-center">
+                                            <Link href={`/tournaments/detail?id=${t.id}`} className="block text-center">
                                                 <span className="text-base font-black text-slate-900 dark:text-slate-100 group-hover:text-blue-600 transition-colors drop-shadow-sm">
                                                     {t.name}
                                                 </span>
@@ -222,7 +222,7 @@ export default function TournamentsPage() {
                                                 >
                                                     <Edit2 className="w-4.5 h-4.5" />
                                                 </button>
-                                                <Link href={`/tournaments/${t.id}`} className="p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-300 hover:text-slate-900 transition-all active:scale-95 border border-transparent hover:border-slate-200">
+                                                <Link href={`/tournaments/detail?id=${t.id}`} className="p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-300 hover:text-slate-900 transition-all active:scale-95 border border-transparent hover:border-slate-200">
                                                     <ChevronRight className="w-6 h-6" />
                                                 </Link>
                                             </div>
