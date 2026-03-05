@@ -129,7 +129,7 @@ export default function TacticalDashboard({ logs }: TacticalDashboardProps) {
                 dominantBaseline="central"
                 className="text-[11px] font-black"
             >
-                {`${(percent * 100).toFixed(0)}%`}
+                {`${name} ${(percent * 100).toFixed(0)}%`}
             </text>
         );
     };
@@ -202,7 +202,7 @@ export default function TacticalDashboard({ logs }: TacticalDashboardProps) {
                             <p className="text-xs text-slate-500 font-medium italic">어떤 포인트가 점수의 핵심인가요?</p>
                         </div>
                     </div>
-                    <div className="h-[250px] w-full">
+                    <div className="h-[320px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                                 <Pie
@@ -211,7 +211,7 @@ export default function TacticalDashboard({ logs }: TacticalDashboardProps) {
                                     cy="50%"
                                     labelLine={{ stroke: '#cbd5e1', strokeWidth: 1.5 }}
                                     label={renderCustomizedLabel}
-                                    outerRadius={80}
+                                    outerRadius={100}
                                     fill="#8884d8"
                                     dataKey="value"
                                 >
@@ -220,10 +220,9 @@ export default function TacticalDashboard({ logs }: TacticalDashboardProps) {
                                     ))}
                                 </Pie>
                                 <Tooltip
-                                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.15)' }}
                                     formatter={(value: any, name: any) => [`${value}회 (${((value / (winners.length || 1)) * 100).toFixed(1)}%)`, name || '기술']}
                                 />
-                                <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: 800 }} />
                             </PieChart>
                         </ResponsiveContainer>
                     </div>
@@ -239,7 +238,7 @@ export default function TacticalDashboard({ logs }: TacticalDashboardProps) {
                             <p className="text-xs text-slate-500 font-medium italic">어떤 실점 유형을 보강해야 할까요?</p>
                         </div>
                     </div>
-                    <div className="h-[250px] w-full">
+                    <div className="h-[320px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                                 <Pie
@@ -248,7 +247,7 @@ export default function TacticalDashboard({ logs }: TacticalDashboardProps) {
                                     cy="50%"
                                     labelLine={{ stroke: '#cbd5e1', strokeWidth: 1.5 }}
                                     label={renderCustomizedLabel}
-                                    outerRadius={80}
+                                    outerRadius={100}
                                     fill="#8884d8"
                                     dataKey="value"
                                 >
@@ -257,10 +256,9 @@ export default function TacticalDashboard({ logs }: TacticalDashboardProps) {
                                     ))}
                                 </Pie>
                                 <Tooltip
-                                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.15)' }}
                                     formatter={(value: any, name: any) => [`${value}회 (${((value / (losses.length || 1)) * 100).toFixed(1)}%)`, name || '기술']}
                                 />
-                                <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: 800 }} />
                             </PieChart>
                         </ResponsiveContainer>
                     </div>
