@@ -65,6 +65,8 @@ function TournamentDetailContent() {
     const [mySetScore, setMySetScore] = useState(0);
     const [oppSetScore, setOppSetScore] = useState(0);
     const [youtubeId, setYoutubeId] = useState('');
+    const [youtubeId2, setYoutubeId2] = useState('');
+    const [youtubeId3, setYoutubeId3] = useState('');
 
     const fetchData = async () => {
         if (!tournamentId) return;
@@ -157,6 +159,8 @@ function TournamentDetailContent() {
         setMySetScore(match.my_set_score);
         setOppSetScore(match.opponent_set_score);
         setYoutubeId(match.youtube_video_id || '');
+        setYoutubeId2(match.youtube_video_id_2 || '');
+        setYoutubeId3(match.youtube_video_id_3 || '');
         setShowAddModal(true);
     };
 
@@ -170,6 +174,8 @@ function TournamentDetailContent() {
         setMySetScore(0);
         setOppSetScore(0);
         setYoutubeId('');
+        setYoutubeId2('');
+        setYoutubeId3('');
     };
 
     const handleAddMatch = async (e: React.FormEvent) => {
@@ -179,7 +185,6 @@ function TournamentDetailContent() {
 
         try {
             const matchResult = mySetScore > oppSetScore ? 'win' : 'loss';
-            const finalYoutubeId = extractYoutubeId(youtubeId);
 
             const matchData = {
                 tournament_id: tournamentId,
@@ -192,7 +197,9 @@ function TournamentDetailContent() {
                 my_set_score: mySetScore,
                 opponent_set_score: oppSetScore,
                 match_result: matchResult,
-                youtube_video_id: finalYoutubeId
+                youtube_video_id: extractYoutubeId(youtubeId),
+                youtube_video_id_2: extractYoutubeId(youtubeId2),
+                youtube_video_id_3: extractYoutubeId(youtubeId3)
             };
 
             let res;
@@ -550,19 +557,54 @@ function TournamentDetailContent() {
                                             </div>
                                         </div>
 
-                                        <div>
-                                            <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">YouTube 영상 ID</label>
+                                        <div className="space-y-3">
+                                            <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">YouTube 영상 (최대 3개 등록 가능)</label>
+
                                             <div className="relative">
-                                                <Youtube className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-red-500" />
+                                                <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                    <Youtube className="w-4 h-4 text-red-500" />
+                                                    <span className="text-[10px] font-black text-slate-300">1Set</span>
+                                                </div>
                                                 <input
                                                     type="text"
                                                     value={youtubeId}
                                                     onChange={(e) => setYoutubeId(e.target.value)}
-                                                    placeholder="예: L0H9-sP7N3A (URL의 v= 뒤의 값)"
-                                                    className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-red-500 transition-all font-bold text-sm"
+                                                    placeholder="URL 또는 영상 ID"
+                                                    className="w-full pl-20 pr-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-red-500 transition-all font-bold text-sm"
                                                 />
                                             </div>
-                                            <p className="mt-2 text-[10px] text-slate-400">영상을 등록하면 랠리별 타임스탬프 동기화 기능을 사용할 수 있습니다.</p>
+
+                                            <div className="relative">
+                                                <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                    <Youtube className="w-4 h-4 text-slate-400" />
+                                                    <span className="text-[10px] font-black text-slate-300">2Set</span>
+                                                </div>
+                                                <input
+                                                    type="text"
+                                                    value={youtubeId2}
+                                                    onChange={(e) => setYoutubeId2(e.target.value)}
+                                                    placeholder="URL 또는 영상 ID (선택 사항)"
+                                                    className="w-full pl-20 pr-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-red-500 transition-all font-bold text-sm"
+                                                />
+                                            </div>
+
+                                            <div className="relative">
+                                                <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                    <Youtube className="w-4 h-4 text-slate-400" />
+                                                    <span className="text-[10px] font-black text-slate-300">3Set</span>
+                                                </div>
+                                                <input
+                                                    type="text"
+                                                    value={youtubeId3}
+                                                    onChange={(e) => setYoutubeId3(e.target.value)}
+                                                    placeholder="URL 또는 영상 ID (선택 사항)"
+                                                    className="w-full pl-20 pr-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-red-500 transition-all font-bold text-sm"
+                                                />
+                                            </div>
+
+                                            <p className="mt-2 text-[10px] text-slate-400 leading-relaxed">
+                                                영상 하나에 모든 세트가 있으면 **1Set**에만 등록하세요. 세트별로 영상이 다르면 각각 등록하세요. 타임스탬프 동기화에 필수입니다.
+                                            </p>
                                         </div>
 
                                         <div className="pt-6">

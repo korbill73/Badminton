@@ -47,6 +47,8 @@ export interface BDMatch {
   opponent_set_score: number;
   match_result: BDMatchResultType;
   youtube_video_id?: string;
+  youtube_video_id_2?: string;
+  youtube_video_id_3?: string;
   feedback_notes?: string;
   created_at: string;
 
@@ -74,4 +76,5 @@ export interface MomentumData {
   scoreGap: number;
   score: string;
   isMyPoint: boolean;
+  pointType?: string;
 }

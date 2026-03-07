@@ -45,8 +45,9 @@ export default function ClutchAnalysis({ logs }: ClutchAnalysisProps) {
                                 cy="50%"
                                 innerRadius={60}
                                 outerRadius={80}
-                                paddingAngle={5}
+                                isAnimationActive={false}
                                 dataKey="value"
+
                             >
                                 {data.map((entry, index) => (
                                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
