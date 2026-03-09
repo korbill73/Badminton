@@ -25,6 +25,19 @@ import {
     Cpu,
     Target,
 } from 'lucide-react';
+import {
+    ResponsiveContainer,
+    RadarChart,
+    PolarGrid,
+    PolarAngleAxis,
+    PolarRadiusAxis,
+    Radar,
+    XAxis,
+    YAxis,
+    BarChart,
+    Bar,
+    Cell
+} from 'recharts';
 import CategorySelectModal from './CategorySelectModal';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -78,6 +91,54 @@ export default function DataEntryLogger({
     const [showCustom, setShowCustom] = useState(false);
     const [customTarget, setCustomTarget] = useState<{ type: CategoryType; group: CategoryGroup } | null>(null);
 
+    const radarMetrics = React.useMemo(() => {
+        const winners = logs.filter(l => l.is_my_point);
+        const losses = logs.filter(l => !l.is_my_point);
+        const total = logs.length;
+        if (total === 0) return [
+            { subject: '공격력', A: 0, fullMark: 100 },
+            { subject: '정교함', A: 0, fullMark: 100 },
+            { subject: '안정성', A: 0, fullMark: 100 },
+            { subject: '위기관리', A: 0, fullMark: 100 },
+            { subject: '기술 다양성', A: 0, fullMark: 100 },
+        ];
+
+        const getCatGroup = (name: string) => categories.find(c => c.name === name)?.category_group || 'others';
+
+        // 1. 공격력 (Power)
+        const offensiveWinners = winners.filter(l => getCatGroup(l.point_type) === 'offensive');
+        const powerPI = (offensiveWinners.length / (winners.length || 1)) * 100;
+
+        // 2. 정교함 (Control)
+        const tacticalWinners = winners.filter(l => getCatGroup(l.point_type) === 'tactical');
+        const tacticalLosses = losses.filter(l => getCatGroup(l.point_type) === 'tactical');
+        const controlPI = (tacticalWinners.length / (tacticalWinners.length + tacticalLosses.length || 1)) * 100;
+
+        // 3. 안정성 (Stability)
+        const unforcedErrors = losses.filter(l => getCatGroup(l.point_type) === 'error');
+        const stabilityPI = ((total - unforcedErrors.length) / total) * 100;
+
+        // 4. 위기관리 (Clutch) - 15점 이후
+        const clutchLogs = logs.filter(l => {
+            const [me, opp] = (l.current_score || '0-0').split('-').map(Number);
+            return (me >= 15 || opp >= 15);
+        });
+        const clutchWinners = clutchLogs.filter(l => l.is_my_point);
+        const clutchPI = (clutchWinners.length / (clutchLogs.length || 1)) * 100;
+
+        // 5. 기술 다양성 (Variety)
+        const uniqueWinningTypes = new Set(winners.map(l => l.point_type)).size;
+        const varietyPI = Math.min(100, (uniqueWinningTypes / 6) * 100);
+
+        return [
+            { subject: '공격력', A: Math.round(powerPI), fullMark: 100 },
+            { subject: '정교함', A: Math.round(controlPI), fullMark: 100 },
+            { subject: '안정성', A: Math.round(stabilityPI), fullMark: 100 },
+            { subject: '위기관리', A: Math.round(clutchPI), fullMark: 100 },
+            { subject: '기술 다양성', A: Math.round(varietyPI), fullMark: 100 },
+        ];
+    }, [logs, categories]);
+
     // Calculate Technique Metrics
     const techniqueMetrics = React.useMemo(() => {
         const winnerCats = categories.filter(c => c.type === 'winner');
@@ -104,14 +165,20 @@ export default function DataEntryLogger({
     const handleAddLog = async (isWinner: boolean, pointType: string) => {
         if (submitting) return;
         setSubmitting(true);
+
         try {
+            // Calculate approximate next score locally to avoid '0-0' flash/reset
+            const currentMe = logs.filter(l => l.is_my_point).length;
+            const currentOpp = logs.filter(l => !l.is_my_point).length;
+            const nextScore = isWinner ? `${currentMe + 1}-${currentOpp}` : `${currentMe}-${currentOpp + 1}`;
+
             const timestamp = player ? Math.floor(player.getCurrentTime()) : 0;
             const { data, error } = await supabase
                 .from('bd_point_logs')
                 .insert([{
                     match_id: matchId,
                     set_number: currentSet,
-                    current_score: '0-0',
+                    current_score: nextScore,
                     is_my_point: isWinner,
                     point_type: pointType,
                     video_timestamp: timestamp
@@ -319,8 +386,8 @@ export default function DataEntryLogger({
                             <Target className="w-4 h-4 text-cyan-400" />
                         </div>
                         <div className="flex flex-col">
-                            <span className="text-[13px] font-black text-white uppercase tracking-tight">기술별 실시간 분석</span>
-                            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest opacity-60">Live Analytics (Vertical View)</span>
+                            <span className="text-[13px] font-black text-white uppercase tracking-tight">전술 밸런스 심층 분석</span>
+                            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest opacity-60">Tactical Balance Deep Analysis</span>
                         </div>
                     </div>
 
@@ -337,64 +404,57 @@ export default function DataEntryLogger({
                     </button>
                 </div>
 
-                <div className="flex-1 flex items-end justify-around gap-2 px-2 pb-4">
-                    {techniqueMetrics.length > 0 ? (
-                        techniqueMetrics.map(tech => {
-                            const ui = getTechColor(tech.name);
-                            const tryHeight = (tech.attempts / maxAttempts) * 100;
-                            const hitHeight = (tech.successes / maxAttempts) * 100;
+                <div className="flex-1 flex items-center justify-center min-h-0 py-2">
+                    <div className="w-full h-full max-h-[220px] relative">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <RadarChart cx="50%" cy="50%" outerRadius="75%" data={radarMetrics}>
+                                <PolarGrid stroke="#334155" strokeDasharray="3 3" />
+                                <PolarAngleAxis
+                                    dataKey="subject"
+                                    tick={(props: any) => {
+                                        const { x, y, payload, textAnchor } = props;
+                                        const metric = radarMetrics.find(m => m.subject === payload.value);
+                                        return (
+                                            <g transform={`translate(${x},${y})`}>
+                                                <text
+                                                    textAnchor={textAnchor}
+                                                    fill="#f8fafc"
+                                                    fontSize={13}
+                                                    fontWeight="900"
+                                                    className="tracking-tighter"
+                                                >
+                                                    {payload.value}
+                                                    <tspan fill="#3b82f6" dx={4}>({metric?.A || 0})</tspan>
+                                                </text>
+                                            </g>
+                                        );
+                                    }}
+                                />
+                                <PolarRadiusAxis
+                                    angle={30}
+                                    domain={[0, 100]}
+                                    tick={false}
+                                    axisLine={false}
+                                />
+                                <Radar
+                                    name="Performance"
+                                    dataKey="A"
+                                    stroke="#3b82f6"
+                                    strokeWidth={3}
+                                    fill="#3b82f6"
+                                    fillOpacity={0.3}
+                                    animationDuration={1500}
+                                />
+                            </RadarChart>
+                        </ResponsiveContainer>
 
-                            return (
-                                <div key={tech.name} className="flex-1 flex flex-col items-center gap-2 group h-full justify-end">
-                                    <div className="flex flex-col items-center gap-1 peer shrink-0">
-                                        <div className="flex items-baseline gap-1 mb-0.5">
-                                            <span className={cn("text-xl font-black tabular-nums tracking-tighter", ui.color)}>
-                                                {tech.successes}
-                                            </span>
-                                            <span className="text-[10px] font-bold text-slate-600">/</span>
-                                            <span className="text-sm font-black text-slate-400 tabular-nums">
-                                                {tech.attempts}
-                                            </span>
-                                        </div>
-                                        <span className={cn("text-[9px] font-black tracking-tight px-1.5 py-0.5 rounded-full bg-slate-900 border border-white/5", ui.color)}>
-                                            {tech.rate}%
-                                        </span>
-                                    </div>
-
-                                    <div className="w-full max-w-[60px] flex-1 min-h-[60px] flex items-end justify-center gap-1.5">
-                                        {/* TRY BAR (Base Volume) */}
-                                        <div className="w-[12px] bg-cyan-400/10 rounded-t-lg relative overflow-hidden group-hover:bg-cyan-400/20 transition-all duration-500 border border-cyan-500/10"
-                                            style={{ height: `${tryHeight}%` }}>
-                                            <div className="absolute inset-x-0 top-0 h-1 bg-cyan-400/30" />
-                                        </div>
-
-                                        {/* HIT BAR (Success Volume) */}
-                                        <div className={cn("w-[22px] rounded-t-xl relative z-10 transition-all duration-1000 ease-out flex items-start justify-center pt-2 overflow-hidden shadow-2xl", ui.bg, ui.light)}
-                                            style={{ height: `${hitHeight}%` }}>
-                                            <div className="w-full h-full absolute inset-0 bg-white/20 animate-pulse" />
-                                            {tech.rate >= 20 && (
-                                                <div className="w-1 h-6 rounded-full bg-white/40 blur-[1px]" />
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    <div className="w-full text-center">
-                                        <span className="text-[11px] font-black text-slate-400 group-hover:text-white transition-colors uppercase truncate block px-1">
-                                            {tech.name}
-                                        </span>
-                                    </div>
-                                </div>
-                            );
-                        })
-                    ) : (
-                        <div className="h-full w-full flex flex-col items-center justify-center text-slate-600 gap-4 opacity-30">
-                            <Sparkles className="w-10 h-10" />
-                            <div className="flex flex-col items-center gap-1 text-center">
-                                <p className="text-[11px] font-black uppercase tracking-[0.3em]">Ready for Analysis</p>
-                                <p className="text-[9px] font-bold">경기 데이터를 기록하여 실시간 분석을 시작하세요</p>
+                        {/* Real-time Status Overlay */}
+                        <div className="absolute top-0 right-0 flex flex-col gap-2 p-2 pointer-events-none">
+                            <div className="px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 shadow-[0_0_10px_rgba(59,130,246,0.2)]">
+                                <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest animate-pulse">Live Tracking</span>
                             </div>
                         </div>
-                    )}
+                    </div>
                 </div>
             </div>
 

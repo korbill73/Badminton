@@ -25,6 +25,7 @@ interface RallyTimelineProps {
     onResetSet?: () => void;
     categories: Category[];
     activeTime?: number;
+    lastAddedId?: string | null;
 }
 
 interface Category {
@@ -37,6 +38,7 @@ interface Category {
 export default function RallyTimeline({
     logs,
     currentSet,
+    onSetChange, // Add missing prop
     onRallyClick,
     onDelete,
     onDeleteBulk,
@@ -45,7 +47,8 @@ export default function RallyTimeline({
     onInsert,
     onResetSet,
     categories,
-    activeTime = 0
+    activeTime = 0,
+    lastAddedId = null
 }: RallyTimelineProps) {
     const [editingId, setEditingId] = useState<string | null>(null);
     const editingLog = useMemo(() => logs.find(l => l.id === editingId), [logs, editingId]);
@@ -99,6 +102,21 @@ export default function RallyTimeline({
             }
         }
     }, [activeIndex, logs]);
+
+    // Auto-scroll to newly added log
+    useEffect(() => {
+        if (lastAddedId) {
+            const container = document.getElementById('rally-timeline-scroll-container');
+            const el = document.getElementById(`rally-log-${lastAddedId}`);
+            if (container && el) {
+                // Scroll the newly added log into the center of the container
+                container.scrollTo({
+                    top: el.offsetTop - container.offsetTop - (container.clientHeight / 2) + (el.clientHeight / 2),
+                    behavior: 'smooth'
+                });
+            }
+        }
+    }, [lastAddedId]);
 
 
     return (
@@ -165,7 +183,8 @@ export default function RallyTimeline({
                                         log.is_my_point
                                             ? "ring-2 ring-cyan-500 bg-cyan-500/10 border-cyan-400 z-10 shadow-[0_0_20px_rgba(0,242,255,0.3)]"
                                             : "ring-2 ring-rose-500 bg-rose-500/10 border-rose-400 z-10 shadow-[0_0_20px_rgba(255,0,127,0.3)]"
-                                    )
+                                    ),
+                                    lastAddedId === log.id && "ring-4 ring-yellow-400/50 bg-yellow-400/5 border-yellow-400 shadow-[0_0_30px_rgba(250,204,21,0.4)] z-[20] animate-pulse"
                                 )}
                             >
                                 {/* Score Display - Enlarged */}
@@ -179,6 +198,11 @@ export default function RallyTimeline({
                                     )}>
                                         {log.current_score}
                                     </span>
+                                    {lastAddedId === log.id && (
+                                        <div className="absolute -top-1 -left-1 px-1.5 py-0.5 bg-yellow-400 text-slate-950 text-[8px] font-black rounded-full animate-bounce shadow-lg">
+                                            NEW
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Type Label - Optimized for Korean */}

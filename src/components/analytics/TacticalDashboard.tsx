@@ -16,24 +16,32 @@ import {
     PolarGrid,
     PolarAngleAxis,
     PolarRadiusAxis,
+    PieChart,
+    Pie,
+    LineChart,
+    Line,
+    LabelList,
 } from 'recharts';
 import { BDPointLog } from '@/types';
 import {
     Zap,
     Shield,
-    Target,
     Clock,
     Layers,
     ArrowRightCircle,
     CheckCircle2,
     AlertCircle,
     Compass,
-    Sparkles
+    Sparkles,
+    Target,
+    Trophy
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn } from '../../lib/utils';
 
 interface TacticalDashboardProps {
     logs: BDPointLog[];
+    selectedSet: 'total' | number | 'compare';
+    onSetChange: (set: 'total' | number | 'compare') => void;
 }
 
 interface Category {
@@ -43,9 +51,8 @@ interface Category {
     category_group: 'offensive' | 'tactical' | 'error' | 'others';
 }
 
-export default function TacticalDashboard({ logs }: TacticalDashboardProps) {
+export default function TacticalDashboard({ logs, selectedSet, onSetChange }: TacticalDashboardProps) {
     const [categories, setCategories] = useState<Category[]>([]);
-    const [selectedSet, setSelectedSet] = useState<'total' | number | 'compare'>('total');
 
     useEffect(() => {
         const fetchCategories = async () => {
@@ -63,17 +70,18 @@ export default function TacticalDashboard({ logs }: TacticalDashboardProps) {
 
         const getCatGroup = (name: string) => categories.find(c => c.name === name)?.category_group || 'others';
 
-        // PI Calculation
+        // 1. 기초 지표 산출 가공
         const offensiveWinners = winners.filter(l => getCatGroup(l.point_type) === 'offensive');
-        const powerPI = (offensiveWinners.length / (winners.length || 1)) * 100;
-
-        const unforcedErrors = losses.filter(l => getCatGroup(l.point_type) === 'error');
-        const stabilityPI = ((total - unforcedErrors.length) / total) * 100;
-
         const tacticalWinners = winners.filter(l => getCatGroup(l.point_type) === 'tactical');
         const tacticalLosses = losses.filter(l => getCatGroup(l.point_type) === 'tactical');
-        const controlPI = (tacticalWinners.length / (tacticalWinners.length + tacticalLosses.length || 1)) * 100;
+        const unforcedErrors = losses.filter(l => getCatGroup(l.point_type) === 'error');
 
+        // 서비스 지표 (정교함 및 집중도)
+        const serviceWins = winners.filter(l => l.point_type.includes('서비스') || l.point_type.includes('서브'));
+        const serviceErrors = losses.filter(l => l.point_type.includes('서비스 실수') || l.point_type.includes('서브 실수'));
+        const serviceIndex = (serviceWins.length / (serviceWins.length + serviceErrors.length || 1)) * 100;
+
+        // 클러치 기록 (15점 이후)
         const clutchLogs = data.filter(l => {
             const [me, opp] = (l.current_score || '0-0').split('-').map(Number);
             return (me >= 15 || opp >= 15);
@@ -81,34 +89,100 @@ export default function TacticalDashboard({ logs }: TacticalDashboardProps) {
         const clutchWinners = clutchLogs.filter(l => l.is_my_point);
         const clutchPI = (clutchWinners.length / (clutchLogs.length || 1)) * 100;
 
+        // 기술 다양성
         const uniqueWinningTypes = new Set(winners.map(l => l.point_type)).size;
+
+        // 2. PI (Performance Index) 산출
+        const powerPI = (offensiveWinners.length / (winners.length || 1)) * 100;
+        const stabilityPI = ((total - unforcedErrors.length) / total) * 100;
+        const controlPI = (tacticalWinners.length / (tacticalWinners.length + tacticalLosses.length || 1)) * 100;
         const varietyPI = Math.min(100, (uniqueWinningTypes / 6) * 100);
 
-        // Shot Efficiency
-        const shotTypes = ['스매시', '드롭', '헤어핀', '드라이브', '네트킬'];
-        const efficiencyData = shotTypes.map(type => {
-            const typeWinners = winners.filter(l => l.point_type.includes(type)).length;
-            // 유저의 직접적인 실수만 필터링 (명칭에 실수가 포함되거나, 걸림/아웃 등 범실성 키워드 매칭)
-            // '피습' (상대 공격에 당함)은 나의 시도 횟수에서 제외
-            const typeErrors = losses.filter(l =>
-                l.point_type.includes(type) &&
-                (l.point_type.includes('실수') || l.point_type.includes('아웃') || l.point_type.includes('걸림') || l.point_type.includes('실패')) &&
-                !l.point_type.includes('피습')
-            ).length;
+        // 3. 지표별 근거 및 해석 (Radar Detail) - Font size/style focused
+        const radarExplanations = [
+            {
+                subject: '공격력',
+                value: Math.round(powerPI),
+                reason: `<div class="space-y-1">
+                    <span class="text-xl font-bold text-slate-900 dark:text-white">전체 득점 중 공격적인 피니시 비중이 <strong>${Math.round(powerPI)}%</strong>입니다.</span>
+                    <span class="text-[10px] font-black text-blue-500 uppercase tracking-widest block">산출 근거: (공격 범주 기술 득점 / 전체 득점) × 100</span>
+                    <span class="text-base text-slate-500 mt-1 block">${powerPI > 60 ? '네트 앞 점유율이 높고 스매시 종결력이 매우 우수하여 주도적인 경기를 운영하고 있습니다.' : '공격 찬스에서의 결정력이 다소 아쉽습니다. 더 과감한 타점 확보와 하향 타구가 필요합니다.'}</span>
+                </div>`
+            },
+            {
+                subject: '정교함',
+                value: Math.round(controlPI),
+                reason: `<div class="space-y-1">
+                    <span class="text-xl font-bold text-slate-900 dark:text-white">전술적 랠리 상황에서의 공방 승률이 <strong>${Math.round(controlPI)}%</strong>를 기록 중입니다.</span>
+                    <span class="text-[10px] font-black text-blue-500 uppercase tracking-widest block">산출 근거: (전술적 기술 득점 / 전술적 기술 총 발생) × 100</span>
+                    <span class="text-base text-slate-500 mt-1 block">${controlPI > 50 ? '셔틀콕의 코스 공략이 정교하며, 상대의 빈 공간을 찾아내는 시야가 매우 넓습니다.' : '단순한 코스 선택으로 인해 상대에게 역습을 허용하는 빈도가 높습니다. 대각선 활용을 늘리세요.'}</span>
+                </div>`
+            },
+            {
+                subject: '안정성',
+                value: Math.round(stabilityPI),
+                reason: `<div class="space-y-1">
+                    <span class="text-xl font-bold text-slate-900 dark:text-white">경기 전체 운영 안정도는 <strong>${Math.round(stabilityPI)}%</strong>로 측정되었습니다.</span>
+                    <span class="text-[10px] font-black text-blue-500 uppercase tracking-widest block">산출 근거: ((전체 포인트 - 비강제 범실) / 전체 포인트) × 100</span>
+                    <span class="text-base text-slate-500 mt-1 block">${stabilityPI > 75 ? '불필요한 범실이 적고 침착한 경기 운영을 보여주고 있어 장기전에서 매우 유리합니다.' : '비강제 범실(네트 걸림, 아웃) 비중이 높습니다. 하이클리어의 길이를 조절하여 안정을 찾아야 합니다.'}</span>
+                </div>`
+            },
+            {
+                subject: '위기관리',
+                value: Math.round(clutchPI),
+                reason: `<div class="space-y-1">
+                    <span class="text-xl font-bold text-slate-900 dark:text-white">15점 이후 승부처(클러치 타임) 득점 성공률은 <strong>${Math.round(clutchPI)}%</strong>입니다.</span>
+                    <span class="text-[10px] font-black text-blue-500 uppercase tracking-widest block">산출 근거: (15점 이후 득점 / 15점 이후 전체 포인트) × 100</span>
+                    <span class="text-base text-slate-500 mt-1 block">${clutchPI > 50 ? '경기 종반의 심리적 압박을 이겨내고 본인의 플레이를 유지하는 강한 멘탈을 보유하고 있습니다.' : '세트 후반 체력 저하와 함께 급격한 집중력 분산이 보입니다. 짧은 호흡으로 템포를 조절하세요.'}</span>
+                </div>`
+            },
+            {
+                subject: '기술 다양성',
+                value: Math.round(varietyPI),
+                reason: `<div class="space-y-1">
+                    <span class="text-xl font-bold text-slate-900 dark:text-white">사용된 득점 기술의 종류는 총 <strong>${uniqueWinningTypes}종</strong>입니다.</span>
+                    <span class="text-[10px] font-black text-blue-500 uppercase tracking-widest block">산출 근거: Min(100, (득점 기술 종류 / 6) × 100)</span>
+                    <span class="text-base text-slate-500 mt-1 block">${uniqueWinningTypes >= 5 ? '다양한 기술적 옵션을 보유하고 있어 상대가 수비 패턴을 예측하기 매우 어렵습니다.' : '공격 루트가 단조로워 상대가 쉽게 적응하고 있습니다. 헤어핀과 드롭의 섞어 쓰기가 필요합니다.'}</span>
+                </div>`
+            },
+        ];
 
-            const totalAttempts = typeWinners + typeErrors;
-            const successRate = (typeWinners / (totalAttempts || 1)) * 100;
+        // 4. 기술별 효율성 (Ranking Data) - 동적 추출로 변경
+        const allUsedWinningTypes = Array.from(new Set(winners.map(l => l.point_type)));
+        const allUsedErrorTypes = Array.from(new Set(losses.map(l => l.point_type)));
+        const relevantShotKeywords = ['스매시', '드롭', '헤어핀', '드라이브', '네트킬', '클리어', '푸시', '커트', '어택', '킬'];
+
+        // 득점 기술 랭킹 (동적 추출 기반) - 시도 횟수(Attempt) 계산 로직 정교화
+        const efficiencyData = allUsedWinningTypes.map(type => {
+            const typeWinners = winners.filter(l => l.point_type === type).length;
+            // 시도 횟수 = 성공(type) + 해당 기술과 연관된 실점(type 키워드 포함 실점)
+            const typeFailures = losses.filter(l => l.point_type.includes(type)).length;
+            const typeTotalAttempts = typeWinners + typeFailures;
+
+            const successRate = (typeWinners / (typeTotalAttempts || 1)) * 100;
+            const contributionRate = (typeWinners / (winners.length || 1)) * 100;
+
             return {
                 name: type,
                 rate: Math.round(successRate),
+                contributionRate: Math.round(contributionRate),
                 winners: typeWinners,
-                errors: typeErrors,
-                attempts: totalAttempts
+                attempts: typeTotalAttempts
             };
-        }).filter(d => d.attempts > 0).sort((a, b) => b.attempts - a.attempts);
+        }).filter(d => d.winners > 0).sort((a, b) => b.winners - a.winners);
 
+        // 실점 원인 랭킹 (동적 추출 기반)
+        const errorRanking = allUsedErrorTypes.map(type => {
+            const typeErrors = losses.filter(l => l.point_type === type).length;
+            const contributionRate = (typeErrors / (losses.length || 1)) * 100;
+            return {
+                name: type,
+                count: typeErrors,
+                contributionRate: Math.round(contributionRate)
+            };
+        }).filter(d => d.count > 0).sort((a, b) => b.count - a.count);
 
-        // Phase Performance
+        // 5. 구간별 분석 (Phase Analysis)
         const getPhase = (score: string) => {
             const [me, opp] = (score || '0-0').split('-').map(Number);
             const max = Math.max(me, opp);
@@ -120,62 +194,144 @@ export default function TacticalDashboard({ logs }: TacticalDashboardProps) {
         const phaseData = phases.map(p => {
             const phaseLogs = data.filter(l => getPhase(l.current_score) === p);
             const pWinners = phaseLogs.filter(l => l.is_my_point).length;
+            const pLosses = phaseLogs.filter(l => !l.is_my_point).length;
             const pTotal = phaseLogs.length;
-            return { name: p, winRate: pTotal > 0 ? Math.round((pWinners / pTotal) * 100) : 0, total: pTotal };
-        });
+            const winRate = pTotal > 0 ? Math.round((pWinners / pTotal) * 100) : 0;
 
-        // Momentum Streak
-        let maxWinStreak = 0;
-        let currentStreak = 0;
-        data.forEach(l => {
-            if (l.is_my_point) {
-                currentStreak++;
-                maxWinStreak = Math.max(maxWinStreak, currentStreak);
+            let reason = '';
+            if (p === '경기 초반 (0-10점)') {
+                reason = winRate > 50 ? '날카로운 선제 공격으로 초반 기선 제압에 성공했습니다.' : '서브 리시브 불안과 상대 템포 적응 지연으로 초반 주도권을 내주었습니다.';
+            } else if (p === '경기 중반 (11-15점)') {
+                reason = winRate > 50 ? '체력적인 우위를 바탕으로 랠리를 길게 가져가며 상대를 압박했습니다.' : '집중력이 흐트러지는 구간입니다. 단순한 실책이 연달아 발생하며 위기를 겪었습니다.';
             } else {
-                currentStreak = 0;
+                reason = winRate > 50 ? '승부처에서의 과감한 결정력과 탄탄한 수비로 승기를 굳혔습니다.' : '후반부 결정력이 크게 하락하며 막판 뒤집기를 허용하는 패턴이 보입니다.';
             }
+
+            return {
+                name: p,
+                winRate,
+                winners: pWinners,
+                losses: pLosses,
+                total: pTotal,
+                reason
+            };
         });
 
         const bestShot = [...efficiencyData].sort((a, b) => b.rate - a.rate)[0];
-        const mostError = [...efficiencyData].sort((a, b) => b.errors - a.errors)[0];
+        const mostError = errorRanking[0];
+
+        // 6. Streak Analysis
+        let maxWinStreak = 0;
+        let currentWinStreak = 0;
+        let maxLossStreak = 0;
+        let currentLossStreak = 0;
+
+        data.forEach(l => {
+            if (l.is_my_point) {
+                currentWinStreak++;
+                maxWinStreak = Math.max(maxWinStreak, currentWinStreak);
+                currentLossStreak = 0;
+            } else {
+                currentLossStreak++;
+                maxLossStreak = Math.max(maxLossStreak, currentLossStreak);
+                currentWinStreak = 0;
+            }
+        });
+
+        // 7. 전략 제언 시스템 (Against same opponent)
+        const strategyAdvice = [];
+        if (serviceIndex < 40) strategyAdvice.push("서비스 실수를 줄이는 것이 급선무입니다. 숏 서브의 높이를 낮게 유지하세요.");
+        if (stabilityPI < 60) strategyAdvice.push("불안정한 연결구가 실점의 빌미를 줍니다. 셔틀콕을 더 높고 깊게 보내 여유를 확보하세요.");
+        if (bestShot && bestShot.rate > 70) strategyAdvice.push(`${bestShot.name} 성공률(${bestShot.rate}%)이 경이적입니다. 랠리의 종결 지점으로 적극 설계하세요.`);
+        if (mostError && mostError.count >= 3) strategyAdvice.push(`${mostError.name} 실점(${mostError.count}회)이 뼈아픕니다. 코스 선택 시 중앙보다는 코너를 노려 안전하게 처리하세요.`);
 
         return {
-            radar: [
-                { subject: '공격력', value: Math.round(powerPI), fullMark: 100, icon: <Zap className="w-3 h-3" /> },
-                { subject: '정교함', value: Math.round(controlPI), fullMark: 100, icon: <Compass className="w-3 h-3" /> },
-                { subject: '안정성', value: Math.round(stabilityPI), fullMark: 100, icon: <Shield className="w-3 h-3" /> },
-                { subject: '위기관리', value: Math.round(clutchPI), fullMark: 100, icon: <Clock className="w-3 h-3" /> },
-                { subject: '기술 다양성', value: Math.round(varietyPI), fullMark: 100, icon: <Layers className="w-3 h-3" /> },
-            ],
-            efficiency: efficiencyData,
-            phase: phaseData,
-            winStreak: maxWinStreak,
-            totalPoints: total,
             winPoints: winners.length,
             lossPoints: losses.length,
+            totalPoints: total,
+            serviceIndex: Math.round(serviceIndex),
+            radar: radarExplanations,
+            efficiency: efficiencyData,
+            errorRanking,
+            top3Efficiency: efficiencyData.slice(0, 3),
+            top3Error: errorRanking.slice(0, 3),
+            winStreak: maxWinStreak,
+            lossStreak: maxLossStreak,
+            phase: phaseData,
+            bestShot,
+            mostError,
+            clutchData: {
+                winners: clutchWinners.length,
+                losses: clutchLogs.length - clutchWinners.length,
+                rate: Math.round(clutchPI)
+            },
             swot: {
-                strength: bestShot ? `압도적인 성과를 내는 <strong>'${bestShot.name}'</strong>이(가) 당신의 핵심 엔진입니다. 이 기술을 활용한 랠리 주도권 확보가 주효했습니다.` : '충분한 경기 데이터가 필요합니다.',
-                weakness: mostError && mostError.errors > 2 ? `<strong>'${mostError.name}'</strong> 시도 중 발생하는 범실이 전체 실점의 주요 원인입니다. 타점 위치와 스윙 궤적 재점검을 권장합니다.` : '현재 큰 기술적 약점은 보이지 않습니다.',
-                opportunity: clutchPI < 40 ? '경기 후반(15점 이후) 집중력이 다소 떨어집니다. 인터벌 이후의 체력 및 멘탈 관리가 요구됩니다.' : '후반 집중력이 매우 탁월합니다. 경기 초반 안정적인 운영으로 기세만 유지한다면 승률이 대폭 상승할 것입니다.',
-                threat: stabilityPI < 60 ? '비강제 범실(UE) 비중이 위험 수준입니다. 무리한 공격 시도보다는 정확한 코스로의 연결구가 우선되어야 합니다.' : '현재 매우 안정적인 경기력을 유지하고 있습니다. 큰 전술적 위협 요소가 없습니다.'
-            }
+                strength: bestShot ? `압도적인 성과를 내는 <strong>'${bestShot.name}'</strong>이(가) 핵심 병기입니다. ${bestShot.rate}%의 성공률로 랠리 종결력이 탁월합니다.` : '충분한 득점 데이터가 필요합니다.',
+                weakness: mostError && mostError.count >= 2 ? `<strong>'${mostError.name}'</strong> 상황에서의 범실(${mostError.count}회)이 주 실점 원인입니다. 타점 중심을 낮추고 안정적 임팩트가 필요합니다.` : '현재 큰 기술적 범실 약점은 보이지 않습니다.',
+                opportunity: clutchPI < 40 ? '경기 후반부 점수 획득률이 낮습니다. 체력 안배와 정적인 템포 조절이 필요합니다.' : '후반부 집중력이 탁월합니다. 경기 중반까지만 대등하게 유지해도 승산이 큽니다.',
+                threat: serviceIndex < 50 ? '서브 범실 비중이 매우 위험합니다. 공짜 점수를 내주어 상대의 기세를 살려주고 있습니다.' : '안전한 서비스와 안정적인 운영으로 상대의 공격을 효과적으로 억제 중입니다.'
+            },
+            strategy: strategyAdvice.length > 0 ? strategyAdvice : ["현재 패턴을 유지하며 상대의 체력적 약점 노출 대기"]
         };
     };
 
     const currentData = useMemo(() => {
         if (selectedSet === 'total') return calculateMetrics(logs);
-        if (typeof selectedSet === 'number') return calculateMetrics(logs.filter(l => l.set_number === selectedSet));
+        if (typeof selectedSet === 'number') {
+            const setLogs = logs.filter(l => l.set_number === selectedSet);
+            return calculateMetrics(setLogs);
+        }
         return null;
     }, [logs, selectedSet, categories]);
 
     const compareMetrics = useMemo(() => {
         if (selectedSet !== 'compare') return null;
         const availableSets = Array.from(new Set(logs.map(l => l.set_number))).sort((a, b) => a - b);
-        return availableSets.map(s => ({
-            setNumber: s,
-            metrics: calculateMetrics(logs.filter(l => l.set_number === s))
-        })).filter(s => s.metrics !== null);
+        return availableSets.map(s => {
+            const setLogs = logs.filter(l => l.set_number === s);
+            return {
+                setNumber: s,
+                metrics: calculateMetrics(setLogs)
+            };
+        }).filter(s => s.metrics !== null);
     }, [logs, selectedSet, categories]);
+
+    const { trendData, topShots } = useMemo(() => {
+        const availableSets = Array.from(new Set(logs.map(l => l.set_number))).sort((a, b) => a - b);
+
+        // Dynamic extraction of top 5 most used winning techniques
+        const winners = logs.filter(l => l.is_my_point);
+        const typeCounts: Record<string, number> = {};
+        winners.forEach(l => {
+            typeCounts[l.point_type] = (typeCounts[l.point_type] || 0) + 1;
+        });
+
+        const dynamicTopShots = Object.entries(typeCounts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(e => e[0]);
+
+        const data = availableSets.map(s => {
+            const setLogs = logs.filter(l => l.set_number === s);
+            const metrics = calculateMetrics(setLogs);
+            const point: any = { set: `${s}세트` };
+
+            if (metrics) {
+                dynamicTopShots.forEach(name => {
+                    const eff = metrics.efficiency.find(e => e.name === name);
+                    point[name] = eff ? eff.winners : 0;
+                });
+            } else {
+                dynamicTopShots.forEach(name => point[name] = 0);
+            }
+
+            return point;
+        });
+
+        return { trendData: data, topShots: dynamicTopShots };
+    }, [logs, categories]);
+
+    const totalMetrics = useMemo(() => calculateMetrics(logs), [logs, categories]);
 
     if (logs.length < 3) {
         return (
@@ -183,238 +339,755 @@ export default function TacticalDashboard({ logs }: TacticalDashboardProps) {
                 <div className="w-16 h-16 bg-white dark:bg-slate-800 rounded-3xl shadow-sm flex items-center justify-center mb-4">
                     <Sparkles className="w-8 h-8 text-blue-500 animate-pulse" />
                 </div>
-                <h3 className="text-lg font-black text-slate-800 dark:text-white mb-2">전술 분석 대기 중</h3>
-                <p className="text-sm text-slate-500 max-w-[280px]">의미 있는 분석을 위해 최소 3개 이상의 랠리를 기록해 주세요. 세트별 비교 분석이 활성화됩니다.</p>
+                <h3 className="text-lg font-black text-slate-800 dark:text-white mb-2">전문 전술 분석 대기 중</h3>
+                <p className="text-sm text-slate-500 max-w-[280px]">심층 분석 시나리오 구성을 위해 3개 이상의 랠리 데이터가 필요합니다.</p>
             </div>
         );
     }
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-700">
-            {/* Control Panel */}
-            <div className="flex flex-wrap items-center justify-between gap-4 bg-white dark:bg-slate-900 p-2 rounded-[24px] border border-slate-100 dark:border-slate-800 shadow-sm">
-                <div className="flex items-center gap-1">
-                    {(['total', 1, 2, 3, 'compare'] as const).map(tab => {
+        <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-1000">
+            {/* 1. 컨트롤 패널 (전문적인 분석 도구 느낌) - Sticky Navigation */}
+            <div className="sticky top-4 z-50 flex flex-wrap items-center justify-between gap-6 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl p-3 rounded-[32px] border border-slate-200/50 dark:border-slate-800/50 shadow-lg mb-8">
+                <div className="flex items-center gap-2">
+                    {([1, 2, 3, 'compare', 'total'] as const).map(tab => {
                         const isAvailable = tab === 'total' || tab === 'compare' || logs.some(l => l.set_number === tab);
                         if (!isAvailable) return null;
 
                         return (
                             <button
                                 key={tab}
-                                onClick={() => setSelectedSet(tab)}
+                                onClick={() => onSetChange(tab)}
                                 className={cn(
-                                    "px-4 py-2 rounded-xl text-xs font-black transition-all",
+                                    "px-8 py-3 rounded-2xl text-[15px] font-black transition-all tracking-wider uppercase",
                                     selectedSet === tab
-                                        ? "bg-slate-900 text-white shadow-lg"
-                                        : "text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"
+                                        ? "bg-slate-950 text-white shadow-xl scale-105"
+                                        : "text-slate-500 hover:bg-white dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
                                 )}
                             >
-                                {tab === 'total' ? '전체 분석' : tab === 'compare' ? '세트 비교' : `${tab}세트`}
+                                {tab === 'compare' ? '세트별 비교 분석' : tab === 'total' ? '종합 분석 리포트' : `${tab}세트`}
                             </button>
                         );
                     })}
                 </div>
                 {selectedSet !== 'compare' && currentData && (
-                    <div className="flex items-center gap-4 px-4 text-[10px] font-black uppercase tracking-tighter text-slate-400">
-                        <span>득점: <span className="text-blue-500">{currentData.winPoints}</span></span>
-                        <span>실점: <span className="text-rose-500">{currentData.lossPoints}</span></span>
-                        <div className="h-3 w-px bg-slate-200" />
-                        <span>승률: <span className="text-slate-900 dark:text-white">{Math.round((currentData.winPoints / currentData.totalPoints) * 100)}%</span></span>
+                    <div className="flex items-center gap-6 px-4">
+                        <div className="flex flex-col items-end">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">공격 효율</span>
+                            <span className="text-lg font-black text-slate-900 dark:text-white">{Math.round((currentData!.winPoints / currentData!.totalPoints) * 100)}% <span className="text-[10px] text-slate-400 font-bold ml-0.5">승률</span></span>
+                        </div>
+                        <div className="h-8 w-px bg-slate-200 dark:bg-slate-800" />
+                        <div className="flex flex-col items-end">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">분석 규모</span>
+                            <span className="text-lg font-black text-slate-900 dark:text-white">{currentData.totalPoints} <span className="text-[10px] text-slate-400 font-bold ml-0.5">랠리</span></span>
+                        </div>
                     </div>
                 )}
             </div>
 
+
             {selectedSet === 'compare' && compareMetrics ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {compareMetrics.map((item) => (
-                        <div key={item.setNumber} className="bg-white dark:bg-slate-900 rounded-[32px] p-6 border border-slate-200 dark:border-slate-800 shadow-sm">
-                            <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-sm font-black text-slate-900 dark:text-white">{item.setNumber}세트 전술 분석</h3>
-                                <span className="text-[10px] font-bold text-blue-500">{Math.round((item.metrics!.winPoints / item.metrics!.totalPoints) * 100)}% 승률</span>
-                            </div>
-                            <div className="h-[220px]">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <RadarChart data={item.metrics!.radar}>
-                                        <PolarGrid stroke="#e2e8f0" />
-                                        <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 8, fontWeight: 800 }} />
-                                        <Radar dataKey="value" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.2} strokeWidth={2} />
-                                    </RadarChart>
-                                </ResponsiveContainer>
+                <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-1000">
+                    {/* [NEW] Performance Trend Chart - Redesigned to Individual Sparklines */}
+                    <div className="bg-white dark:bg-slate-900 rounded-[40px] p-10 border border-slate-200 dark:border-slate-800 shadow-sm">
+                        <div className="mb-10 flex items-center justify-between">
+                            <div>
+                                <h3 className="text-2xl font-black text-slate-950 dark:text-white flex items-center gap-2">
+                                    <Layers className="w-8 h-8 text-blue-600" />
+                                    기술별 퍼포먼스 흐름 분석
+                                </h3>
+                                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">세트별 주요 기술의 성공 횟수 추이 (성공 횟수 기준)</p>
                             </div>
                         </div>
-                    ))}
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+                            {topShots.map((shot, idx) => {
+                                const colors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
+                                const color = colors[idx % colors.length];
+
+                                // Calculate total for this shot
+                                const totalWinners = trendData.reduce((acc, curr) => acc + (curr[shot] || 0), 0);
+
+                                return (
+                                    <div key={shot} className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-[32px] border border-slate-100 dark:border-slate-800 transition-all hover:shadow-lg">
+                                        <div className="flex items-center justify-between mb-6">
+                                            <div>
+                                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">{shot} TREND</span>
+                                                <h4 className="text-lg font-black text-slate-900 dark:text-white">{shot}</h4>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-2xl font-black tabular-nums" style={{ color }}>{totalWinners}<span className="text-[10px] ml-1 text-slate-400">회</span></p>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase leading-none">Total Success</p>
+                                            </div>
+                                        </div>
+
+                                        <div className="h-[120px] w-full">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <LineChart data={trendData}>
+                                                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} strokeOpacity={0.5} />
+                                                    <XAxis
+                                                        dataKey="set"
+                                                        hide
+                                                    />
+                                                    <YAxis hide domain={[0, 'auto']} />
+                                                    <Tooltip
+                                                        contentStyle={{
+                                                            backgroundColor: '#0f172a',
+                                                            borderRadius: '12px',
+                                                            border: 'none',
+                                                            padding: '8px 12px',
+                                                        }}
+                                                        labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 900, marginBottom: '4px' }}
+                                                        itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 900, padding: '0' }}
+                                                        formatter={(value: any) => [`${value}회`, shot]}
+                                                    />
+                                                    <Line
+                                                        type="monotone"
+                                                        dataKey={shot}
+                                                        stroke={color}
+                                                        strokeWidth={4}
+                                                        dot={{ r: 4, fill: color, strokeWidth: 2, stroke: '#fff' }}
+                                                        activeDot={{ r: 6, fill: color, strokeWidth: 2, stroke: '#fff' }}
+                                                    >
+                                                        <LabelList
+                                                            dataKey={shot}
+                                                            position="top"
+                                                            content={(props: any) => {
+                                                                const { x, y, value } = props;
+                                                                if (value === 0) return null;
+                                                                return <text x={x} y={y - 12} fill={color} fontSize={11} fontWeight={900} textAnchor="middle">{value}회</text>;
+                                                            }}
+                                                        />
+                                                    </Line>
+                                                </LineChart>
+                                            </ResponsiveContainer>
+                                        </div>
+
+                                        <div className="flex justify-between mt-4 px-1">
+                                            {trendData.map((d, i) => (
+                                                <span key={i} className="text-[10px] font-black text-slate-400 uppercase">{d.set}</span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Comparison Metrics Grid */}
+                    <div className="bg-white dark:bg-slate-900 rounded-[40px] p-10 border border-slate-200 dark:border-slate-800 shadow-sm">
+                        <div className="mb-10 flex items-center justify-between">
+                            <div>
+                                <h3 className="text-2xl font-black text-slate-950 dark:text-white flex items-center gap-2">
+                                    <Compass className="w-8 h-8 text-blue-600" />
+                                    전술 분석 지표 심층 비교
+                                </h3>
+                                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">세트별 상세 기술 성과 및 주요 데이터 지표 분석</p>
+                            </div>
+                        </div>
+                        <div className="bg-white dark:bg-slate-950 rounded-[32px] border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden">
+                            <div className="overflow-x-auto">
+                                <table className="w-full border-collapse">
+                                    <thead>
+                                        <tr className="bg-slate-50 dark:bg-slate-900/50">
+                                            <th className="px-8 py-8 text-left border-b border-slate-100 dark:border-slate-800">
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] leading-none mb-1">Detailed Tactical Metric</span>
+                                                    <span className="text-lg font-black text-slate-950 dark:text-white">분석 지표</span>
+                                                </div>
+                                            </th>
+                                            {compareMetrics.map(m => (
+                                                <th key={m.setNumber} className="px-8 py-8 text-center border-b border-slate-100 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/20">
+                                                    <span className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">{m.setNumber}세트</span>
+                                                </th>
+                                            ))}
+                                            <th className="px-8 py-8 text-center border-b border-slate-100 dark:border-slate-800 bg-blue-600">
+                                                <div className="flex flex-col items-center">
+                                                    <span className="text-[10px] font-black text-blue-200 uppercase tracking-widest leading-none mb-1">Match Stats</span>
+                                                    <span className="text-2xl font-black text-white uppercase tracking-tighter">합계</span>
+                                                </div>
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                        <tr>
+                                            <td className="px-8 py-6 font-black text-sm text-slate-900 dark:text-white bg-slate-50/20 dark:bg-slate-800/20 whitespace-nowrap">세트 승률</td>
+                                            {compareMetrics.map(m => (
+                                                <td key={m.setNumber} className="px-8 py-6 text-center tabular-nums font-black text-blue-600 text-lg">
+                                                    {Math.round((m.metrics!.winPoints / m.metrics!.totalPoints) * 100)}%
+                                                </td>
+                                            ))}
+                                            <td className="px-8 py-6 text-center tabular-nums font-black text-blue-100 bg-blue-600/95 text-lg">
+                                                {Math.round((totalMetrics!.winPoints / totalMetrics!.totalPoints) * 100)}%
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td className="px-8 py-6 font-black text-sm text-slate-900 dark:text-white bg-slate-50/20 dark:bg-slate-800/20 whitespace-nowrap">핵심 무기 (Top 3)</td>
+                                            {compareMetrics.map(m => (
+                                                <td key={m.setNumber} className="px-8 py-6 text-center">
+                                                    <div className="flex flex-col gap-2 items-center">
+                                                        {m.metrics!.top3Efficiency.map((s, idx) => (
+                                                            <div key={idx} className="flex items-center gap-3 text-sm">
+                                                                <span className="font-black text-slate-950 dark:text-white w-20 text-left whitespace-nowrap">{s.name}</span>
+                                                                <span className="font-black text-blue-600 whitespace-nowrap">{s.winners}회 <span className="text-slate-400 font-bold ml-1 text-[11px]">({s.contributionRate}%)</span></span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </td>
+                                            ))}
+                                            <td className="px-8 py-6 text-center bg-blue-600/95">
+                                                <div className="flex flex-col gap-2 items-center">
+                                                    {totalMetrics!.top3Efficiency.slice(0, 3).map((s, idx) => (
+                                                        <div key={idx} className="flex items-center gap-3 text-sm">
+                                                            <span className="font-black text-white w-20 text-left whitespace-nowrap">{s.name}</span>
+                                                            <span className="font-black text-blue-100 whitespace-nowrap">{s.winners}회 <span className="text-blue-200/60 font-bold ml-1 text-[11px]">({s.contributionRate}%)</span></span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td className="px-8 py-6 font-black text-sm text-slate-900 dark:text-white bg-slate-50/20 dark:bg-slate-800/20 whitespace-nowrap">주요 실점 원인 (Top 3)</td>
+                                            {compareMetrics.map(m => (
+                                                <td key={m.setNumber} className="px-8 py-6 text-center">
+                                                    <div className="flex flex-col gap-2 items-center">
+                                                        {m.metrics!.top3Error.map((s, idx) => (
+                                                            <div key={idx} className="flex items-center gap-3 text-sm">
+                                                                <span className="font-black text-slate-950 dark:text-white w-20 text-left whitespace-nowrap">{s.name}</span>
+                                                                <span className="font-black text-rose-500 whitespace-nowrap">{s.count}회 <span className="text-slate-400 font-bold ml-1 text-[11px]">({s.contributionRate}%)</span></span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </td>
+                                            ))}
+                                            <td className="px-8 py-6 text-center bg-blue-600/95">
+                                                <div className="flex flex-col gap-2 items-center">
+                                                    {totalMetrics!.top3Error.slice(0, 3).map((s, idx) => (
+                                                        <div key={idx} className="flex items-center gap-3 text-sm">
+                                                            <span className="font-black text-white w-20 text-left whitespace-nowrap">{s.name}</span>
+                                                            <span className="font-black text-rose-200 whitespace-nowrap">{s.count}회 <span className="text-blue-200/60 font-bold ml-1 text-[11px]">({s.contributionRate}%)</span></span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td className="px-8 py-6 font-black text-sm text-slate-900 dark:text-white bg-slate-50/20 dark:bg-slate-800/20 whitespace-nowrap">클러치 해결력</td>
+                                            {compareMetrics.map(m => (
+                                                <td key={m.setNumber} className="px-8 py-6 text-center tabular-nums font-black text-amber-600 text-lg">
+                                                    {m.metrics!.clutchData.rate}%
+                                                </td>
+                                            ))}
+                                            <td className="px-8 py-6 text-center tabular-nums font-black text-blue-100 bg-blue-600/95 text-lg">
+                                                {totalMetrics!.clutchData.rate}%
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td className="px-8 py-6 font-black text-sm text-slate-900 dark:text-white bg-slate-50/20 dark:bg-slate-800/20 whitespace-nowrap">최대 연속 득점</td>
+                                            {compareMetrics.map(m => (
+                                                <td key={m.setNumber} className="px-8 py-6 text-center tabular-nums font-black text-blue-600 text-lg">
+                                                    {m.metrics!.winStreak} <span className="text-[10px] text-slate-400">회</span>
+                                                </td>
+                                            ))}
+                                            <td className="px-8 py-6 text-center tabular-nums font-black text-blue-100 bg-blue-600/95 text-lg">
+                                                {totalMetrics!.winStreak} <span className="text-[10px] text-blue-200/60">회</span>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td className="px-8 py-6 font-black text-sm text-slate-900 dark:text-white bg-slate-50/20 dark:bg-slate-800/20 whitespace-nowrap">최대 연속 실점</td>
+                                            {compareMetrics.map(m => (
+                                                <td key={m.setNumber} className="px-8 py-6 text-center tabular-nums font-black text-rose-500 text-lg">
+                                                    {m.metrics!.lossStreak} <span className="text-[10px] text-slate-400">회</span>
+                                                </td>
+                                            ))}
+                                            <td className="px-8 py-6 text-center tabular-nums font-black text-blue-100 bg-blue-600/95 text-lg">
+                                                {totalMetrics?.lossStreak || 0} <span className="text-[10px] text-blue-200/60">회</span>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td className="px-8 py-6 bg-slate-50/20 dark:bg-slate-800/20 whitespace-nowrap">
+                                                <div className="flex flex-col gap-0.5">
+                                                    <span className="font-black text-sm text-slate-900 dark:text-white md:whitespace-nowrap">서비스 효율지수</span>
+                                                    <span className="text-[10px] text-slate-400 font-bold leading-tight">서브 이후 득점 성공률</span>
+                                                </div>
+                                            </td>
+                                            {compareMetrics.map(m => (
+                                                <td key={m.setNumber} className="px-8 py-6 text-center font-black text-slate-900 dark:text-white tabular-nums text-lg">
+                                                    {m.metrics!.serviceIndex}%
+                                                </td>
+                                            ))}
+                                            <td className="px-8 py-6 text-center font-black text-blue-100 tabular-nums bg-blue-600/95 text-lg">
+                                                {totalMetrics?.serviceIndex || 0}%
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td className="px-8 py-6 font-black text-sm text-slate-900 dark:text-white whitespace-nowrap">주요 기술별 성공률</td>
+                                            {compareMetrics.map(m => (
+                                                <td key={m.setNumber} className="px-8 py-6 text-center text-sm font-bold">
+                                                    <div className="flex flex-col gap-1.5">
+                                                        {m.metrics!.efficiency.slice(0, 3).map((eff, i) => (
+                                                            <div key={i} className="flex justify-between gap-3 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-xl whitespace-nowrap">
+                                                                <span className="text-slate-600 dark:text-slate-400 font-black whitespace-nowrap">{eff.name}</span>
+                                                                <span className="text-blue-600 font-black tabular-nums">{eff.rate}%</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </td>
+                                            ))}
+                                            <td className="px-8 py-6 text-center text-sm font-bold bg-blue-600/95">
+                                                <div className="flex flex-col gap-1.5">
+                                                    {totalMetrics?.efficiency.slice(0, 3).map((eff, i) => (
+                                                        <div key={i} className="flex justify-between gap-3 p-2 bg-white/10 rounded-xl border border-white/5 whitespace-nowrap">
+                                                            <span className="text-white/90 font-black whitespace-nowrap">{eff.name}</span>
+                                                            <span className="text-white font-black tabular-nums">{eff.rate}%</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                        {compareMetrics.map((item) => (
+                            <div key={item.setNumber} className="bg-white dark:bg-slate-900 rounded-[32px] p-8 border border-slate-200 dark:border-slate-800 shadow-sm transition-all hover:shadow-xl group">
+                                <div className="flex items-center justify-between mb-6">
+                                    <h3 className="text-sm font-black text-slate-950 dark:text-white group-hover:text-blue-600 transition-colors uppercase tracking-widest">{item.setNumber}세트 전술 밸런스</h3>
+                                </div>
+                                <div className="h-[240px] mb-8">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <RadarChart data={item.metrics!.radar}>
+                                            <PolarGrid stroke="#e2e8f0" strokeDasharray="4 4" />
+                                            <PolarAngleAxis
+                                                dataKey="subject"
+                                                tick={(props: any) => {
+                                                    const { x, y, payload, textAnchor } = props;
+                                                    const val = item.metrics?.radar.find(r => r.subject === payload.value)?.value;
+                                                    return (
+                                                        <text x={x} y={y} textAnchor={textAnchor} fill="#64748b" fontSize={13} fontWeight={900}>
+                                                            {payload.value} ({val})
+                                                        </text>
+                                                    );
+                                                }}
+                                            />
+                                            <Radar
+                                                dataKey="value"
+                                                stroke="#3b82f6"
+                                                fill="#3b82f6"
+                                                fillOpacity={0.15}
+                                                strokeWidth={3}
+                                                dot={(props: any) => {
+                                                    const { cx, cy, payload } = props;
+                                                    const sortedValues = [...item.metrics!.radar].map(r => r.value).sort((a, b) => b - a);
+                                                    const isMax = payload.value === sortedValues[0];
+                                                    const isMin = payload.value === sortedValues[sortedValues.length - 1];
+
+                                                    if (isMax) {
+                                                        return (
+                                                            <g key={props.key}>
+                                                                <circle cx={cx} cy={cy} r={10} className="fill-blue-600 opacity-30 animate-ping" />
+                                                                <circle cx={cx} cy={cy} r={5} className="fill-blue-600 shadow-lg" />
+                                                            </g>
+                                                        );
+                                                    }
+                                                    if (isMin) {
+                                                        return (
+                                                            <g key={props.key}>
+                                                                <circle cx={cx} cy={cy} r={10} className="fill-rose-500 opacity-30 animate-ping" />
+                                                                <circle cx={cx} cy={cy} r={5} className="fill-rose-500 shadow-lg" />
+                                                            </g>
+                                                        );
+                                                    }
+                                                    return <circle key={props.key} cx={cx} cy={cy} r={3} fill="#cbd5e1" />;
+                                                }}
+                                            />
+                                        </RadarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                                <div className="space-y-4 pt-6 border-t border-slate-100 dark:border-slate-800">
+                                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">전술 포인트 분석</h4>
+                                    {/* 강점과 약점을 부각시키는 로직 */}
+                                    {(() => {
+                                        const sortedRadar = [...item.metrics!.radar].sort((a, b) => b.value - a.value);
+                                        const strength = sortedRadar[0];
+                                        const weakness = sortedRadar[sortedRadar.length - 1];
+                                        return (
+                                            <div className="space-y-3">
+                                                <div className="flex items-center justify-between p-3.5 bg-blue-600 dark:bg-blue-600 rounded-2xl shadow-lg shadow-blue-200/50 dark:shadow-none transition-transform hover:scale-[1.02]">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-2.5 h-2.5 rounded-full bg-white shadow-sm animate-pulse" />
+                                                        <span className="text-sm font-black text-white">강점: {strength.subject}</span>
+                                                    </div>
+                                                    <span className="text-lg font-black text-white leading-none">{strength.value}점</span>
+                                                </div>
+                                                <div className="flex items-center justify-between p-3.5 bg-rose-500 dark:bg-rose-600 rounded-2xl shadow-lg shadow-rose-200/50 dark:shadow-none transition-transform hover:scale-[1.02]">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-2.5 h-2.5 rounded-full bg-white shadow-sm animate-pulse" />
+                                                        <span className="text-sm font-black text-white">약점: {weakness.subject}</span>
+                                                    </div>
+                                                    <span className="text-lg font-black text-white leading-none">{weakness.value}점</span>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             ) : currentData && (
                 <>
-                    {/* AI Coaching Card */}
-                    <div className="bg-slate-900 rounded-[32px] p-8 text-white border border-white/10 shadow-2xl relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full -mr-32 -mt-32 blur-3xl opacity-50" />
-                        <div className="relative z-10">
-                            <div className="flex items-center gap-3 mb-8">
-                                <div className="w-12 h-12 bg-blue-500/20 rounded-2xl flex items-center justify-center border border-blue-500/30">
-                                    <Sparkles className="w-6 h-6 text-blue-400" />
+                    {/* 1. Technical Ranking Dashboard (Scoring & Error Rankings + Clutch) */}
+                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 mb-12">
+                        {/* Scoring Ranking Card */}
+                        <div className="bg-white dark:bg-slate-950 rounded-[40px] p-8 border border-slate-200 dark:border-white/10 shadow-sm dark:shadow-2xl relative overflow-hidden group/rank-card">
+                            <div className="flex items-center gap-4 mb-8">
+                                <div className="w-10 h-10 rounded-2xl bg-blue-500/10 flex items-center justify-center border border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.2)]">
+                                    <Trophy className="w-5 h-5 text-blue-500" />
                                 </div>
                                 <div>
-                                    <h2 className="text-xl font-black tracking-tight">AI 전략 코칭 리포트 ({selectedSet === 'total' ? '전체' : `${selectedSet}세트`})</h2>
-                                    <p className="text-xs text-slate-400 font-medium">데이터가 분석한 당신의 전문 전술 프로필</p>
+                                    <h3 className="text-xl font-black text-slate-950 dark:text-white flex items-center gap-2">
+                                        득점 기술 랭킹
+                                    </h3>
+                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Top Scoring: Success Rate & Contribution</p>
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="space-y-4">
-                                    <div className="bg-white/5 p-5 rounded-3xl border border-white/5">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">장점 (Strength)</span>
-                                        </div>
-                                        <p className="text-sm font-bold text-slate-200 leading-relaxed" dangerouslySetInnerHTML={{ __html: currentData.swot.strength }} />
-                                    </div>
-                                    <div className="bg-white/5 p-5 rounded-3xl border border-white/5">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <AlertCircle className="w-4 h-4 text-rose-400" />
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-rose-400">약점 (Weakness)</span>
-                                        </div>
-                                        <p className="text-sm font-bold text-slate-200 leading-relaxed" dangerouslySetInnerHTML={{ __html: currentData.swot.weakness }} />
-                                    </div>
-                                </div>
-                                <div className="space-y-4">
-                                    <div className="bg-white/5 p-5 rounded-3xl border border-white/5">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <Target className="w-4 h-4 text-blue-400" />
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-blue-400">기회 (Opportunity)</span>
-                                        </div>
-                                        <p className="text-sm font-bold text-slate-200 leading-relaxed">{currentData.swot.opportunity}</p>
-                                    </div>
-                                    <div className="bg-white/5 p-5 rounded-3xl border border-white/5">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <ArrowRightCircle className="w-4 h-4 text-orange-400" />
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-orange-400">위험 (Threat)</span>
-                                        </div>
-                                        <p className="text-sm font-bold text-slate-200 leading-relaxed">{currentData.swot.threat}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        {/* Radar PI */}
-                        <div className="bg-white dark:bg-slate-900 rounded-[32px] p-8 border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col">
-                            <div className="mb-8">
-                                <h3 className="text-lg font-black flex items-center gap-2 text-slate-950 dark:text-white">
-                                    <Compass className="w-5 h-5 text-blue-600" />
-                                    전술 밸런스 분석
-                                </h3>
-                                <p className="text-xs text-slate-500 font-medium italic">5대 핵심 성과 지표 분석</p>
-                            </div>
-                            <div className="h-[280px] w-full flex items-center justify-center flex-1">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <RadarChart cx="50%" cy="50%" outerRadius="80%" data={currentData.radar}>
-                                        <PolarGrid stroke="#e2e8f0" />
-                                        <PolarAngleAxis dataKey="subject" tick={{ fill: '#64748b', fontSize: 10, fontWeight: 800 }} />
-                                        <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
-                                        <Radar name="지표" dataKey="value" stroke="#3b82f6" fill="#3b82f6" strokeWidth={3} fillOpacity={0.2} />
-                                    </RadarChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </div>
-
-                        {/* Shot Efficiency */}
-                        <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-[32px] p-8 border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
-                            <div className="mb-8 flex items-center justify-between">
-                                <h3 className="text-lg font-black flex items-center gap-2 text-slate-950 dark:text-white">
-                                    <Zap className="w-5 h-5 text-blue-600" />
-                                    기술별 득점 성공률 및 시도 횟수
-                                </h3>
-                                <div className="text-right">
-                                    <span className="text-[10px] font-black text-slate-400 block mb-1">최다 연속 득점</span>
-                                    <span className="text-xl font-black text-emerald-500 underline decoration-emerald-500/20 underline-offset-4">{currentData.winStreak} 점</span>
-                                </div>
-                            </div>
-                            <div className="h-[300px] w-full">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={currentData.efficiency} layout="vertical" margin={{ left: -20, right: 40 }}>
-                                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                                        <XAxis type="number" domain={[0, 100]} hide />
-                                        <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fill: '#1e293b', fontSize: 11, fontWeight: 900 }} />
-                                        <Tooltip
-                                            cursor={{ fill: '#f8fafc' }}
-                                            content={({ active, payload }) => {
-                                                if (active && payload && payload.length) {
-                                                    const d = payload[0].payload;
-                                                    return (
-                                                        <div className="bg-slate-900 p-4 rounded-2xl border border-white/10 shadow-2xl text-white">
-                                                            <p className="text-xs font-black mb-1">{d.name}</p>
-                                                            <p className="text-[10px] text-blue-300">득점 성공: {d.winners}회 / 전체 시도: {d.attempts}회</p>
-                                                            <div className="mt-2 pt-2 border-t border-white/10">
-                                                                <p className="text-sm font-black text-white">성공 확률: {d.rate}%</p>
-                                                            </div>
+                            <div className="w-full mt-4 space-y-3">
+                                {currentData.efficiency.length > 0 ? (
+                                    currentData.efficiency.slice(0, 5).map((item: any, index: number) => {
+                                        const medals = ['🥇', '🥈', '🥉', '4위', '5위'];
+                                        const maxVal = Math.max(...currentData.efficiency.map((d: any) => d.winners));
+                                        const barPct = maxVal > 0 ? (item.winners / maxVal) * 100 : 0;
+                                        const opacities = [1, 0.88, 0.78, 0.68, 0.58];
+                                        const bgAlphas = ['bg-blue-50 dark:bg-blue-900/20', 'bg-blue-50/80 dark:bg-blue-900/15', 'bg-blue-50/60 dark:bg-blue-900/10', 'bg-slate-50 dark:bg-slate-900/30', 'bg-slate-50 dark:bg-slate-900/20'];
+                                        return (
+                                            <div
+                                                key={item.name}
+                                                className={`rounded-2xl px-4 py-3 border border-blue-100/60 dark:border-white/5 ${bgAlphas[index]} transition-all duration-200 hover:shadow-md hover:scale-[1.01]`}
+                                                style={{ opacity: opacities[index] }}
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    {/* Rank badge */}
+                                                    <div className="text-xl w-8 text-center flex-shrink-0">{medals[index]}</div>
+                                                    {/* Name + bar */}
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-baseline justify-between gap-2 mb-1">
+                                                            <span className="text-sm font-black text-slate-800 dark:text-white truncate">{item.name}</span>
+                                                            <span className="text-base font-black text-blue-600 dark:text-blue-400 tabular-nums flex-shrink-0">
+                                                                {item.winners}<span className="text-xs text-slate-500 font-semibold">/{item.attempts}회</span>
+                                                            </span>
                                                         </div>
-                                                    );
-                                                }
-                                                return null;
-                                            }}
-                                        />
-                                        <Bar
-                                            dataKey="rate"
-                                            radius={[0, 20, 20, 0]}
-                                            barSize={24}
-                                            label={(labelProps: any) => {
-                                                const { x, y, width, value, payload } = labelProps;
-                                                if (!payload) return null;
-                                                return (
-                                                    <text x={x + width + 5} y={y + 16} fill="#64748b" fontSize={10} fontWeight={800}>
-                                                        {payload.winners}/{payload.attempts}회 ({value}%)
-                                                    </text>
-                                                );
-                                            }}
+                                                        {/* Progress bar */}
+                                                        <div className="h-2 rounded-full bg-blue-100 dark:bg-blue-900/30 overflow-hidden">
+                                                            <div
+                                                                className="h-full rounded-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-700"
+                                                                style={{ width: `${barPct}%` }}
+                                                            />
+                                                        </div>
+                                                        {/* Metrics row */}
+                                                        <div className="flex items-center gap-3 mt-1.5">
+                                                            <span className="text-[10px] font-bold text-indigo-500">성공률 {item.rate}%</span>
+                                                            <span className="text-[10px] text-slate-300">|</span>
+                                                            <span className="text-[10px] font-bold text-blue-400">기여율 {item.contributionRate}%</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                ) : (
+                                    <div className="h-32 flex items-center justify-center text-slate-300 dark:text-slate-700 font-bold italic uppercase tracking-widest text-xs">No Data Available</div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Error Ranking Card */}
+                        <div className="bg-white dark:bg-slate-950 rounded-[40px] p-8 border border-slate-200 dark:border-white/10 shadow-sm dark:shadow-2xl relative overflow-hidden group/rank-card">
+                            <div className="flex items-center gap-4 mb-8">
+                                <div className="w-10 h-10 rounded-2xl bg-rose-500/10 flex items-center justify-center border border-rose-500/20 shadow-[0_0_15px_rgba(244,63,94,0.2)]">
+                                    <AlertCircle className="w-5 h-5 text-rose-500" />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-black text-slate-950 dark:text-white flex items-center gap-2">
+                                        실점 원인 랭킹
+                                    </h3>
+                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Top Error Sources: Count & Contribution</p>
+                                </div>
+                            </div>
+
+                            <div className="w-full mt-4 space-y-3">
+                                {currentData.errorRanking.length > 0 ? (
+                                    currentData.errorRanking.slice(0, 5).map((item: any, index: number) => {
+                                        const medals = ['🥇', '🥈', '🥉', '4위', '5위'];
+                                        const maxVal = Math.max(...currentData.errorRanking.map((d: any) => d.count));
+                                        const barPct = maxVal > 0 ? (item.count / maxVal) * 100 : 0;
+                                        const opacities = [1, 0.88, 0.78, 0.68, 0.58];
+                                        const bgAlphas = ['bg-rose-50 dark:bg-rose-900/20', 'bg-rose-50/80 dark:bg-rose-900/15', 'bg-rose-50/60 dark:bg-rose-900/10', 'bg-slate-50 dark:bg-slate-900/30', 'bg-slate-50 dark:bg-slate-900/20'];
+                                        return (
+                                            <div
+                                                key={item.name}
+                                                className={`rounded-2xl px-4 py-3 border border-rose-100/60 dark:border-white/5 ${bgAlphas[index]} transition-all duration-200 hover:shadow-md hover:scale-[1.01]`}
+                                                style={{ opacity: opacities[index] }}
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    {/* Rank badge */}
+                                                    <div className="text-xl w-8 text-center flex-shrink-0">{medals[index]}</div>
+                                                    {/* Name + bar */}
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-baseline justify-between gap-2 mb-1">
+                                                            <span className="text-sm font-black text-slate-800 dark:text-white truncate">{item.name}</span>
+                                                            <span className="text-base font-black text-rose-500 tabular-nums flex-shrink-0">
+                                                                {item.count}<span className="text-xs text-slate-500 font-semibold">회 실점</span>
+                                                            </span>
+                                                        </div>
+                                                        {/* Progress bar */}
+                                                        <div className="h-2 rounded-full bg-rose-100 dark:bg-rose-900/30 overflow-hidden">
+                                                            <div
+                                                                className="h-full rounded-full bg-gradient-to-r from-rose-500 to-rose-400 transition-all duration-700"
+                                                                style={{ width: `${barPct}%` }}
+                                                            />
+                                                        </div>
+                                                        {/* Metrics row */}
+                                                        <div className="flex items-center gap-3 mt-1.5">
+                                                            <span className="text-[10px] font-bold text-orange-500">기여율 {item.contributionRate}%</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                ) : (
+                                    <div className="h-32 flex items-center justify-center text-slate-300 dark:text-slate-700 font-bold italic uppercase tracking-widest text-xs">No Data Available</div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Clutch Analysis */}
+                        <div className="bg-white dark:bg-slate-900 rounded-[40px] p-8 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col items-center justify-center">
+                            <div className="mb-6 w-full">
+                                <h3 className="text-xl font-black text-slate-950 dark:text-white flex items-center gap-2">
+                                    <Clock className="w-5 h-5 text-indigo-600" />
+                                    클러치 분석
+                                </h3>
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">15점 이후 경기 집중도</p>
+                            </div>
+                            <div className="relative w-40 h-40 mb-6">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                        <Pie
+                                            data={[
+                                                { name: '득점', value: currentData.clutchData.winners },
+                                                { name: '실점', value: currentData.clutchData.losses }
+                                            ]}
+                                            innerRadius={50}
+                                            outerRadius={65}
+                                            paddingAngle={5}
+                                            dataKey="value"
                                         >
-                                            {currentData.efficiency.map((entry, idx) => (
-                                                <Cell key={idx} fill={entry.rate > 60 ? '#3b82f6' : entry.rate > 40 ? '#6366f1' : '#94a3b8'} />
-                                            ))}
-                                        </Bar>
-                                    </BarChart>
+                                            <Cell fill="#3b82f6" strokeWidth={0} />
+                                            <Cell fill="#f43f5e" strokeWidth={0} />
+                                        </Pie>
+                                        <Tooltip
+                                            contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                                        />
+                                    </PieChart>
                                 </ResponsiveContainer>
+                                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                                    <span className="text-[10px] font-black text-slate-400 uppercase leading-none mb-1">Win Rate</span>
+                                    <span className="text-2xl font-black text-slate-950 dark:text-white">{currentData.clutchData.rate}%</span>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4 w-full">
+                                <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-2xl text-center">
+                                    <p className="text-[9px] font-black text-blue-600 uppercase mb-1">득점 확률</p>
+                                    <p className="text-lg font-black text-blue-700 dark:text-blue-400">{currentData.clutchData.rate}%</p>
+                                </div>
+                                <div className="bg-rose-50 dark:bg-rose-900/20 p-3 rounded-2xl text-center">
+                                    <p className="text-[9px] font-black text-rose-600 uppercase mb-1">실점 비율</p>
+                                    <p className="text-lg font-black text-rose-700 dark:text-rose-400">{100 - currentData.clutchData.rate}%</p>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Phase Performance & Momentum */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div className="bg-slate-50 dark:bg-slate-800/50 rounded-[32px] p-8 border border-slate-100 dark:border-slate-800">
-                            <h3 className="text-[10px] font-black mb-6 uppercase tracking-widest text-slate-400">경기 구간별 성공률</h3>
-                            <div className="space-y-6">
-                                {currentData.phase.map((p, idx) => (
-                                    <div key={idx} className="flex items-center gap-4">
-                                        <div className="w-32 text-[10px] font-black text-slate-500 uppercase">{p.name}</div>
-                                        <div className="flex-1 h-3 bg-white dark:bg-slate-900 rounded-full overflow-hidden border border-slate-200 dark:border-slate-700">
-                                            <div className={cn("h-full transition-all duration-1000", p.winRate > 50 ? "bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.3)]" : "bg-slate-400")} style={{ width: `${p.winRate}%` }} />
-                                        </div>
-                                        <div className="w-12 text-right text-xs font-black text-slate-700 dark:text-slate-200">{p.winRate}%</div>
-                                    </div>
-                                ))}
+                    {/* 3. AI Coaching Card - SWOT & NEXT STRATEGY */}
+                    <div className="bg-slate-950 rounded-[48px] p-10 mb-12 text-white border border-white/10 shadow-3xl relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-600/10 rounded-full blur-[120px] -mr-64 -mt-64" />
+                        <div className="relative z-10 space-y-12">
+                            <div className="flex items-center gap-4">
+                                <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-3xl flex items-center justify-center shadow-2xl">
+                                    <Sparkles className="w-8 h-8 text-white" />
+                                </div>
+                                <div>
+                                    <span className="text-[10px] font-black text-blue-400 uppercase tracking-[0.4em] mb-1 block">Advanced Tactical Intelligence</span>
+                                    <h2 className="text-3xl font-black tracking-tight">AI 성과 분석 리포트 <span className="text-slate-500 font-bold">({selectedSet === 'total' ? '전체' : `${selectedSet}세트`})</span></h2>
+                                </div>
                             </div>
-                            <p className="mt-6 text-[11px] text-slate-400 font-medium italic">*각 구간별 점수 획득률을 통해 경기 운영 능력을 평가합니다.</p>
+
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                <div className="space-y-6">
+                                    <div className="bg-white/5 p-8 rounded-[32px] border border-white/5">
+                                        <div className="flex items-center gap-3 mb-4">
+                                            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                                            <span className="text-xs font-black uppercase tracking-widest text-emerald-400">장점 (Strength)</span>
+                                        </div>
+                                        <p className="text-xl font-bold text-slate-200 leading-relaxed" dangerouslySetInnerHTML={{ __html: currentData!.swot.strength }} />
+                                    </div>
+                                    <div className="bg-white/5 p-8 rounded-[32px] border border-white/5">
+                                        <div className="flex items-center gap-3 mb-4">
+                                            <AlertCircle className="w-5 h-5 text-rose-400" />
+                                            <span className="text-xs font-black uppercase tracking-widest text-rose-400">약점 (Weakness)</span>
+                                        </div>
+                                        <p className="text-xl font-bold text-slate-200 leading-relaxed" dangerouslySetInnerHTML={{ __html: currentData!.swot.weakness }} />
+                                    </div>
+                                </div>
+                                <div className="space-y-6">
+                                    <div className="bg-white/5 p-8 rounded-[32px] border border-white/5">
+                                        <div className="flex items-center gap-3 mb-4">
+                                            <Target className="w-5 h-5 text-blue-400" />
+                                            <span className="text-xs font-black uppercase tracking-widest text-blue-400">기회 (Opportunity)</span>
+                                        </div>
+                                        <p className="text-xl font-bold text-slate-200 leading-relaxed">{currentData!.swot.opportunity}</p>
+                                    </div>
+                                    <div className="bg-white/5 p-8 rounded-[32px] border border-white/5">
+                                        <div className="flex items-center gap-3 mb-4">
+                                            <ArrowRightCircle className="w-5 h-5 text-orange-400" />
+                                            <span className="text-xs font-black uppercase tracking-widest text-orange-400">위험 (Threat)</span>
+                                        </div>
+                                        <p className="text-xl font-bold text-slate-200 leading-relaxed">{currentData!.swot.threat}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-gradient-to-r from-blue-600/20 to-indigo-600/20 p-8 rounded-[40px] border border-blue-500/30">
+                                <div className="flex items-center gap-3 mb-6">
+                                    <Compass className="w-6 h-6 text-blue-400" />
+                                    <h3 className="text-2xl font-black tracking-tight">차후 동일 상대 대응 전략 가이드</h3>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {currentData!.strategy.map((item, idx) => (
+                                        <div key={idx} className="flex items-start gap-3 bg-slate-900/50 p-6 rounded-3xl border border-white/5">
+                                            <div className="w-2 h-2 bg-blue-500 rounded-full mt-2.5 flex-shrink-0" />
+                                            <p className="text-lg font-bold text-slate-100 leading-relaxed">{item}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="space-y-12">
+                        {/* Radar PI & Detailed Explanations */}
+                        <div className="bg-white dark:bg-slate-900 rounded-[40px] p-10 border border-slate-200 dark:border-slate-800 shadow-sm">
+                            <div className="mb-10">
+                                <h3 className="text-2xl font-black text-slate-950 dark:text-white flex items-center gap-2">
+                                    <Compass className="w-8 h-8 text-blue-600" />
+                                    전술 밸런스 심층 분석
+                                </h3>
+                                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Advanced Performance Radar</p>
+                            </div>
+
+                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+                                <div className="lg:col-span-5 h-[400px] w-full">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <RadarChart cx="50%" cy="50%" outerRadius="80%" data={currentData!.radar}>
+                                            <PolarGrid stroke="#e2e8f0" />
+                                            <PolarAngleAxis
+                                                dataKey="subject"
+                                                tick={(props: any) => {
+                                                    const { x, y, payload, textAnchor } = props;
+                                                    const val = currentData?.radar.find(r => r.subject === payload.value)?.value;
+                                                    return (
+                                                        <text x={x} y={y} textAnchor={textAnchor} fill="#64748b" fontSize={13} fontWeight={900}>
+                                                            {payload.value} <tspan fill="#3b82f6">({val})</tspan>
+                                                        </text>
+                                                    );
+                                                }}
+                                            />
+                                            <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
+                                            <Radar name="지표" dataKey="value" stroke="#3b82f6" fill="#3b82f6" strokeWidth={5} fillOpacity={0.15} />
+                                        </RadarChart>
+                                    </ResponsiveContainer>
+                                </div>
+
+                                <div className="lg:col-span-7 space-y-10 lg:pl-12 lg:border-l border-slate-100 dark:border-slate-800">
+                                    {currentData!.radar.map((r, idx) => (
+                                        <div key={idx} className="group">
+                                            <div className="flex items-center justify-between mb-3">
+                                                <span className="text-sm font-black text-slate-400 uppercase tracking-[0.2em]">{r.subject}</span>
+                                                <span className="text-lg font-black text-blue-600 tabular-nums">{r.value}pts</span>
+                                            </div>
+                                            <div className="p-0 transition-colors" dangerouslySetInnerHTML={{ __html: r.reason }} />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
                         </div>
 
-                        <div className="bg-slate-50 dark:bg-slate-800/50 rounded-[32px] p-8 border border-slate-100 dark:border-slate-800 flex flex-col justify-center">
-                            <div className="flex items-start gap-4 mb-8">
-                                <div className="p-4 bg-emerald-500/10 rounded-3xl border border-emerald-500/20">
-                                    <Zap className="w-8 h-8 text-emerald-500" />
+                        {/* Phase & Flow */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                            <div className="bg-white dark:bg-slate-900 rounded-[40px] p-10 border border-slate-200 dark:border-slate-800 shadow-sm transition-all hover:shadow-xl group">
+                                <div className="flex items-center justify-between mb-10">
+                                    <h3 className="text-2xl font-black text-slate-900 dark:text-white">Phase Performance</h3>
+                                    <Clock className="w-8 h-8 text-blue-600" />
                                 </div>
-                                <div className="space-y-1">
-                                    <h4 className="text-xl font-black text-slate-900 dark:text-white">경기 흐름 지배력</h4>
-                                    <p className="text-xs text-slate-500 font-medium">경기를 지배하는 연속 득점의 파괴력</p>
+                                <div className="space-y-10">
+                                    {currentData!.phase.map((p, idx) => (
+                                        <div key={idx} className="space-y-4">
+                                            <div className="flex items-center justify-between px-1">
+                                                <span className="text-sm font-black text-slate-400 uppercase tracking-widest">{p.name}</span>
+                                                <span className="text-2xl font-black text-slate-950 dark:text-white tabular-nums">{p.winRate}%</span>
+                                            </div>
+                                            <div className="h-5 bg-slate-50 dark:bg-slate-950 rounded-full border border-slate-100 dark:border-slate-800 p-1">
+                                                <div
+                                                    className={cn(
+                                                        "h-full rounded-full transition-all duration-1000",
+                                                        p.winRate > 50 ? "bg-gradient-to-r from-blue-500 to-indigo-600" : "bg-slate-300 dark:bg-slate-700"
+                                                    )}
+                                                    style={{ width: `${p.winRate}%` }}
+                                                />
+                                            </div>
+                                            <p className="text-lg font-bold text-slate-600 dark:text-slate-400 leading-relaxed pl-1">— {p.reason}</p>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-white dark:bg-slate-900 p-5 rounded-[24px] shadow-sm border border-slate-100 dark:border-slate-800">
-                                    <p className="text-[10px] font-black text-emerald-600 uppercase mb-1">최다 연속 득점</p>
-                                    <p className="text-3xl font-black text-slate-900 dark:text-white tabular-nums">{currentData.winStreak}<span className="text-sm ml-1 text-slate-400">점</span></p>
-                                </div>
-                                <div className="bg-white dark:bg-slate-900 p-5 rounded-[24px] shadow-sm border border-slate-100 dark:border-slate-800">
-                                    <p className="text-[10px] font-black text-blue-600 uppercase mb-1">경기 영향 지수</p>
-                                    <p className="text-3xl font-black text-slate-900 dark:text-white tabular-nums">{(currentData.winPoints / (currentData.winPoints + (currentData.winStreak || 1))).toFixed(1)}<span className="text-sm ml-1 text-slate-400">x</span></p>
+
+                            <div className="bg-slate-950 rounded-[40px] p-10 border border-white/5 shadow-2xl flex flex-col justify-between overflow-hidden relative group">
+                                <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 to-transparent pointer-events-none" />
+                                <div className="relative z-10">
+                                    <div className="flex items-center gap-6 mb-12">
+                                        <div className="w-20 h-20 bg-emerald-500/10 rounded-3xl flex items-center justify-center border border-emerald-500/20">
+                                            <Zap className="w-10 h-10 text-emerald-500" />
+                                        </div>
+                                        <div>
+                                            <h4 className="text-3xl font-black text-white uppercase tracking-tight">Momentum Index</h4>
+                                            <p className="text-xs text-emerald-500 font-bold uppercase tracking-[0.3em] mt-1">Burst Performance Capacity</p>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-8 mb-10">
+                                        <div className="bg-white/5 p-8 rounded-[32px] border border-white/5">
+                                            <p className="text-xs font-black text-emerald-500 uppercase tracking-[0.2em] mb-4">MAX STREAK</p>
+                                            <p className="text-5xl font-black text-white tabular-nums">{currentData!.winStreak}<span className="text-sm ml-2 text-slate-400">PTS</span></p>
+                                        </div>
+                                        <div className="bg-white/5 p-8 rounded-[32px] border border-white/5">
+                                            <p className="text-xs font-black text-blue-500 uppercase tracking-[0.2em] mb-4">IMPACT SCALE</p>
+                                            <p className="text-5xl font-black text-white tabular-nums">
+                                                {(currentData!.winPoints / (currentData!.winPoints + (currentData!.winStreak || 1))).toFixed(1)}<span className="text-sm ml-2 text-slate-400">X</span>
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="bg-white/5 p-8 rounded-[32px] border border-white/5">
+                                        <h4 className="text-base font-black text-emerald-500 uppercase tracking-widest mb-4">모멘텀 지수 상세 설명</h4>
+                                        <p className="text-xl font-bold text-slate-300 leading-relaxed">
+                                            모멘텀 지수는 경기 중 한 번 잡은 기세를 얼마나 파괴력 있게 지속하느냐를 측정합니다. <br />
+                                            <strong className="text-white">Max Streak</strong>은 최대 연속 득점수를 의미하며, <strong className="text-white">Impact Scale</strong>은 이 기세가 전체 승률에 미친 유효 영향력을 지표화한 것입니다.
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
                         </div>
