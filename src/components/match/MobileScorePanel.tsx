@@ -15,7 +15,8 @@ import {
     X,
     Loader2,
     Clock,
-    BarChart3
+    BarChart3,
+    Trash2
 } from 'lucide-react';
 import Link from 'next/link';
 import { BDPointLog } from '@/types';
@@ -46,6 +47,7 @@ interface MobileScorePanelProps {
     player: any;
     onPlayerReady: (p: any) => void;
     onShowStats?: () => void;
+    onDeleteLog: (id: string) => Promise<void>;
 }
 
 export default function MobileScorePanel({
@@ -60,6 +62,7 @@ export default function MobileScorePanel({
     player,
     onPlayerReady,
     onShowStats,
+    onDeleteLog,
 }: MobileScorePanelProps) {
     const [activeTab, setActiveTab] = useState<'winner' | 'loss'>('winner');
     const [submitting, setSubmitting] = useState(false);
@@ -125,7 +128,7 @@ export default function MobileScorePanel({
         }
     };
 
-    const recentLogs = [...currentSetLogs].reverse().slice(0, 5);
+    const recentLogs = [...currentSetLogs].reverse();
     const activeCats = activeTab === 'winner' ? winnerCats : lossCats;
 
     return (
@@ -283,29 +286,42 @@ export default function MobileScorePanel({
                     {showHistory ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
                 </button>
                 {showHistory && (
-                    <div className="px-4 pb-3 space-y-1.5 max-h-48 overflow-y-auto">
+                    <div className="px-4 pb-3 space-y-1.5 max-h-[30vh] overflow-y-auto">
                         {recentLogs.length === 0 && (
                             <p className="text-xs text-slate-600 py-2 text-center">기록 없음</p>
                         )}
                         {recentLogs.map((log) => (
                             <div
                                 key={log.id}
-                                onClick={() => handleSeekToLog(log.video_timestamp ?? 0)}
-                                className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs cursor-pointer active:scale-95 transition-transform
+                                className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs
                                     ${log.is_my_point ? 'bg-blue-500/10 border border-blue-500/20' : 'bg-rose-500/10 border border-rose-500/20'}
                                 `}
                             >
-                                <span className={`font-black tabular-nums text-sm ${log.is_my_point ? 'text-blue-400' : 'text-rose-400'}`}>
-                                    {log.current_score}
-                                </span>
-                                <span className={`font-bold flex-1 truncate ${log.is_my_point ? 'text-blue-300' : 'text-rose-300'}`}>
-                                    {log.is_my_point ? '✅' : '❌'} {log.point_type}
-                                </span>
-                                {((log.video_timestamp ?? 0) > 0) && (
-                                    <span className="text-slate-600 font-mono tabular-nums shrink-0">
-                                        {Math.floor((log.video_timestamp ?? 0) / 60)}:{String((log.video_timestamp ?? 0) % 60).padStart(2, '0')}
+                                <div
+                                    className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer active:opacity-60 transition-opacity"
+                                    onClick={() => handleSeekToLog(log.video_timestamp ?? 0)}
+                                >
+                                    <span className={`font-black tabular-nums text-sm ${log.is_my_point ? 'text-blue-400' : 'text-rose-400'}`}>
+                                        {log.current_score}
                                     </span>
-                                )}
+                                    <span className={`font-bold flex-1 truncate ${log.is_my_point ? 'text-blue-300' : 'text-rose-300'}`}>
+                                        {log.is_my_point ? '✅' : '❌'} {log.point_type}
+                                    </span>
+                                    {((log.video_timestamp ?? 0) > 0) && (
+                                        <span className="text-slate-600 font-mono tabular-nums shrink-0">
+                                            {Math.floor((log.video_timestamp ?? 0) / 60)}:{String((log.video_timestamp ?? 0) % 60).padStart(2, '0')}
+                                        </span>
+                                    )}
+                                </div>
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onDeleteLog(log.id);
+                                    }}
+                                    className="p-1 px-2 rounded-lg text-slate-600 active:text-rose-500 active:bg-rose-500/10 transition-colors"
+                                >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                </button>
                             </div>
                         ))}
                     </div>

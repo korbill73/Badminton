@@ -440,6 +440,7 @@ function MatchDetailContent() {
                     player={player}
                     onPlayerReady={setPlayer}
                     onShowStats={() => setIsMobileStatsOpen(true)}
+                    onDeleteLog={handleDeleteLog}
                 />
 
                 {/* Mobile Statistics Overlay */}
