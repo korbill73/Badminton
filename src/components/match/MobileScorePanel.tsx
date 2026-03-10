@@ -12,9 +12,19 @@ import {
     ChevronDown,
     ChevronUp,
     Zap,
+    X,
+    Loader2,
+    Clock,
+    BarChart3
 } from 'lucide-react';
 import Link from 'next/link';
 import { BDPointLog } from '@/types';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+function cn(...inputs: ClassValue[]) {
+    return twMerge(clsx(inputs));
+}
 
 interface Category {
     id: string;
@@ -32,8 +42,10 @@ interface MobileScorePanelProps {
     currentSet: number;
     onSetChange: (set: number) => void;
     onLogAdded: (log: BDPointLog) => void;
+    onLogsAdded?: (newLogs: any[]) => Promise<void>;
     player: any;
     onPlayerReady: (p: any) => void;
+    onShowStats?: () => void;
 }
 
 export default function MobileScorePanel({
@@ -44,8 +56,10 @@ export default function MobileScorePanel({
     currentSet,
     onSetChange,
     onLogAdded,
+    onLogsAdded,
     player,
     onPlayerReady,
+    onShowStats,
 }: MobileScorePanelProps) {
     const [activeTab, setActiveTab] = useState<'winner' | 'loss'>('winner');
     const [submitting, setSubmitting] = useState(false);
@@ -57,6 +71,12 @@ export default function MobileScorePanel({
     const [scoreMe, scoreOpp] = lastLog
         ? lastLog.current_score.split('-').map(Number)
         : [0, 0];
+
+    const currentVideoId = (() => {
+        if (currentSet === 2 && match.youtube_video_id_2) return match.youtube_video_id_2;
+        if (currentSet === 3 && match.youtube_video_id_3) return match.youtube_video_id_3;
+        return match.youtube_video_id;
+    })();
 
     const winnerCats = categories.filter(c => c.type === 'winner');
     const lossCats = categories.filter(c => c.type === 'loss');
@@ -98,20 +118,20 @@ export default function MobileScorePanel({
         }
     }, [submitting, scoreMe, scoreOpp, player, matchId, currentSet, onLogAdded]);
 
-    const currentVideoId = (() => {
-        if (currentSet === 2 && match.youtube_video_id_2) return match.youtube_video_id_2;
-        if (currentSet === 3 && match.youtube_video_id_3) return match.youtube_video_id_3;
-        return match.youtube_video_id;
-    })();
+    const handleSeekToLog = (timestamp: number) => {
+        if (player && timestamp > 0) {
+            player.seekTo(timestamp);
+            player.playVideo();
+        }
+    };
 
     const recentLogs = [...currentSetLogs].reverse().slice(0, 5);
-
     const activeCats = activeTab === 'winner' ? winnerCats : lossCats;
 
     return (
         <div className="flex flex-col h-dvh bg-slate-950 text-white overflow-hidden">
             {/* ── Header ── */}
-            <div className="flex items-center gap-3 px-4 pt-safe pt-3 pb-2 shrink-0 bg-slate-900/80 backdrop-blur border-b border-white/5">
+            <div className="flex items-center gap-2 px-4 pt-safe pt-3 pb-2 shrink-0 bg-slate-900/80 backdrop-blur border-b border-white/5">
                 <Link
                     href={`/tournaments/detail?id=${match.tournament_id}`}
                     className="p-2 rounded-xl bg-white/10 text-white active:bg-white/20 transition"
@@ -119,18 +139,25 @@ export default function MobileScorePanel({
                     <ChevronLeft className="w-4 h-4" />
                 </Link>
                 <div className="flex-1 min-w-0">
-                    <p className="text-[11px] font-bold text-slate-400 truncate">{match.tournament?.name}</p>
+                    <p className="text-[10px] font-bold text-slate-400 truncate">{match.tournament?.name}</p>
                     <p className="text-sm font-black truncate">나 vs {match.opponent_1?.name}</p>
                 </div>
-                {/* Set selector */}
-                <div className="flex gap-1">
+
+                <button
+                    onClick={onShowStats}
+                    className="p-2.5 rounded-xl bg-blue-600/20 text-blue-400 active:bg-blue-600/40 transition border border-blue-500/20 mr-1"
+                >
+                    <BarChart3 className="w-4 h-4" />
+                </button>
+
+                <div className="flex gap-1 shrink-0">
                     {[1, 2, 3].map(s => (
                         <button
                             key={s}
                             onClick={() => onSetChange(s)}
-                            className={`text-xs font-black px-3 py-1.5 rounded-lg transition ${currentSet === s
+                            className={`text-[10px] font-black px-2.5 py-1.5 rounded-lg transition ${currentSet === s
                                 ? 'bg-blue-500 text-white'
-                                : 'bg-white/10 text-slate-400 active:bg-white/20'
+                                : 'bg-white/5 text-slate-500 active:bg-white/10'
                                 }`}
                         >
                             {s}세트
@@ -250,7 +277,7 @@ export default function MobileScorePanel({
             <div className="shrink-0 border-t border-white/5 bg-slate-900/60">
                 <button
                     onClick={() => setShowHistory(v => !v)}
-                    className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-black text-slate-400 active:bg-white/5"
+                    className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-black text-slate-400 active:bg-white/5 transition"
                 >
                     <span>최근 기록 ({currentSetLogs.length})</span>
                     {showHistory ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
@@ -260,10 +287,11 @@ export default function MobileScorePanel({
                         {recentLogs.length === 0 && (
                             <p className="text-xs text-slate-600 py-2 text-center">기록 없음</p>
                         )}
-                        {recentLogs.map((log, i) => (
+                        {recentLogs.map((log) => (
                             <div
                                 key={log.id}
-                                className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs
+                                onClick={() => handleSeekToLog(log.video_timestamp ?? 0)}
+                                className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs cursor-pointer active:scale-95 transition-transform
                                     ${log.is_my_point ? 'bg-blue-500/10 border border-blue-500/20' : 'bg-rose-500/10 border border-rose-500/20'}
                                 `}
                             >
@@ -283,6 +311,12 @@ export default function MobileScorePanel({
                     </div>
                 )}
             </div>
+
+            {submitting && (
+                <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-md flex items-center justify-center z-[110]">
+                    <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
+                </div>
+            )}
         </div>
     );
 }

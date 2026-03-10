@@ -7,7 +7,6 @@ import YoutubePlayer from '@/components/match/YoutubePlayer';
 import RallyTimeline from '@/components/match/RallyTimeline';
 import MomentumChart from '@/components/analytics/MomentumChart';
 import DataEntryLogger from '@/components/match/DataEntryLogger';
-import QuickRecorder from '@/components/match/QuickRecorder';
 import TacticalDashboard from '@/components/analytics/TacticalDashboard';
 import CategorySelectModal from '@/components/match/CategorySelectModal';
 import MobileScorePanel from '@/components/match/MobileScorePanel';
@@ -28,11 +27,16 @@ interface Category {
     type: 'winner' | 'loss';
     category_group: 'offensive' | 'tactical' | 'error' | 'others';
     is_default: boolean;
+    display_order?: number;
 }
 
 function MatchDetailContent() {
     const searchParams = useSearchParams();
     const matchId = searchParams.get('id');
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editName, setEditName] = useState('');
+
+    const [showCustom, setShowCustom] = useState(false);
     const [match, setMatch] = useState<BDMatch | null>(null);
     const [logs, setLogs] = useState<BDPointLog[]>([]);
     const [player, setPlayer] = useState<any>(null);
@@ -41,6 +45,14 @@ function MatchDetailContent() {
     // Unified Set State
     const [currentSet, setCurrentSet] = useState<number>(1);
     const [selectedAnalysisSet, setSelectedAnalysisSet] = useState<'total' | number | 'compare'>('compare');
+    const [isMobileStatsOpen, setIsMobileStatsOpen] = useState(false);
+
+    // Helper to change set globally
+    const handleSetChange = (set: number) => {
+        setCurrentSet(set);
+        setSelectedAnalysisSet(set);
+    };
+
     const [categories, setCategories] = useState<Category[]>([]);
     const [activeTime, setActiveTime] = useState<number>(0);
     const [pendingInsert, setPendingInsert] = useState<{ setNumber: number; timestamp: number; isMyPoint: boolean; pivotCreatedAt?: string } | null>(null);
@@ -61,13 +73,6 @@ function MatchDetailContent() {
             .order('display_order', { ascending: true });
         if (!error && data) setCategories(data);
     };
-
-    // Sync currentSet when analysis set changes
-    useEffect(() => {
-        if (typeof selectedAnalysisSet === 'number') {
-            setCurrentSet(selectedAnalysisSet);
-        }
-    }, [selectedAnalysisSet]);
 
     const fetchMatchData = async (showLoading = true) => {
         if (!matchId) return;
@@ -221,7 +226,41 @@ function MatchDetailContent() {
         }
     };
 
+    const handleBulkAddLogs = async (newLogs: any[]) => {
+        if (!newLogs || newLogs.length === 0) return;
+        setIsSyncing(true);
+        try {
+            // First, insert all new logs to DB
+            const { data, error } = await supabase
+                .from('bd_point_logs')
+                .insert(newLogs.map(l => ({
+                    match_id: matchId,
+                    set_number: l.set_number || currentSet,
+                    is_my_point: l.is_my_point,
+                    point_type: l.point_type,
+                    current_score: '0-0', // Temporary, will be recalculated
+                    video_timestamp: l.video_timestamp || l.timestamp,
+                })))
+                .select();
+
+            if (error) throw error;
+            if (data) {
+                // Now recalculate everything including new ones
+                await syncAndRecalculateAll([...logs, ...data]);
+            }
+        } catch (err: any) {
+            console.error('Bulk save failed:', err);
+            alert('일괄 저장 중 오류가 발생했습니다: ' + err.message);
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
     const handleInsertLog = (targetSet: number, insertTime: number, isMyPoint: boolean = true, pivotCreatedAt?: string) => {
+        // 중간 삽입 모달 오픈 시 영상 일시정지
+        if (player) {
+            player.pauseVideo();
+        }
         setPendingInsert({ setNumber: targetSet, timestamp: Math.floor(insertTime), isMyPoint, pivotCreatedAt });
     };
 
@@ -261,6 +300,10 @@ function MatchDetailContent() {
             if (data) {
                 const finalLogs = await syncAndRecalculateAll([...logs, data]);
                 if (finalLogs) setLastAddedId(data.id);
+                // 점수 기록 후 영상 자동 재생
+                if (player) {
+                    player.playVideo();
+                }
             }
             setPendingInsert(null);
         } catch (err: any) {
@@ -391,11 +434,28 @@ function MatchDetailContent() {
                     categories={categories}
                     matchId={matchId!}
                     currentSet={currentSet}
-                    onSetChange={setCurrentSet}
+                    onSetChange={handleSetChange}
                     onLogAdded={handleAddLog as any}
+                    onLogsAdded={handleBulkAddLogs}
                     player={player}
                     onPlayerReady={setPlayer}
+                    onShowStats={() => setIsMobileStatsOpen(true)}
                 />
+
+                {/* Mobile Statistics Overlay */}
+                {isMobileStatsOpen && (
+                    <div className="fixed inset-0 z-[100] bg-slate-50 dark:bg-slate-950 overflow-y-auto pb-safe">
+                        <div className="max-w-md mx-auto min-h-full bg-white dark:bg-slate-900 shadow-2xl p-4">
+                            <TacticalDashboard
+                                logs={logs}
+                                categories={categories}
+                                selectedSet={selectedAnalysisSet}
+                                onSetChange={setSelectedAnalysisSet}
+                                onClose={() => setIsMobileStatsOpen(false)}
+                            />
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* ── DESKTOP LAYOUT (hidden on mobile) ── */}
@@ -467,7 +527,7 @@ function MatchDetailContent() {
                                             {[1, 2, 3].map((s) => (
                                                 <button
                                                     key={s}
-                                                    onClick={() => setCurrentSet(s)}
+                                                    onClick={() => handleSetChange(s)}
                                                     className={cn(
                                                         "flex-1 flex flex-col items-center justify-center py-1 transition-all gap-0 rounded-xl border",
                                                         currentSet === s
@@ -506,7 +566,7 @@ function MatchDetailContent() {
                                             logs={currentSetLogs}
                                             currentSet={currentSet}
                                             categories={categories}
-                                            onSetChange={setCurrentSet}
+                                            onSetChange={handleSetChange}
                                             onRallyClick={handleRallyClick}
                                             onDelete={handleDeleteLog}
                                             onDeleteBulk={handleDeleteBulk}
@@ -518,20 +578,6 @@ function MatchDetailContent() {
                                             lastAddedId={lastAddedId}
                                         />
                                     </div>
-
-                                    {/* Relocated Quick Recording Buttons */}
-                                    <div className="px-2 pb-2 shrink-0">
-                                        <QuickRecorder
-                                            player={player}
-                                            matchId={matchId as string}
-                                            currentSet={currentSet}
-                                            categories={categories}
-                                            onLogAdded={handleAddLog}
-                                            onTriggerRecord={(isMyPoint, timestamp) => handleInsertLog(currentSet, timestamp, isMyPoint)}
-                                            scoreMe={scoreMe}
-                                            scoreOpp={scoreOpp}
-                                        />
-                                    </div>
                                 </div>
                             </div>
 
@@ -540,11 +586,13 @@ function MatchDetailContent() {
                                 <DataEntryLogger
                                     player={player}
                                     matchId={match.id}
+                                    match={match}
                                     categories={categories}
                                     onCategoryChange={fetchCategories}
                                     onLogAdded={handleAddLog}
                                     currentSet={currentSet}
-                                    onSetChange={setCurrentSet}
+                                    onSetChange={handleSetChange}
+                                    onLogsAdded={handleBulkAddLogs}
                                     logs={currentSetLogs}
                                 />
                             </div>
@@ -572,6 +620,7 @@ function MatchDetailContent() {
                     <div id="analytics-section" className="pt-12 border-t-2 border-slate-200 dark:border-slate-800 space-y-12">
                         <TacticalDashboard
                             logs={logs}
+                            categories={categories}
                             selectedSet={selectedAnalysisSet}
                             onSetChange={setSelectedAnalysisSet}
                         />
@@ -585,7 +634,7 @@ function MatchDetailContent() {
                         onClose={() => setPendingInsert(null)}
                     />
                 </div>{/* end space-y-8 */}
-            </div>{/* end hidden md:block */}
+            </div > {/* end hidden md:block */}
         </>
     );
 }

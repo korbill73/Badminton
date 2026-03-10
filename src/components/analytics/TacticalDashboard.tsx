@@ -34,14 +34,19 @@ import {
     Compass,
     Sparkles,
     Target,
-    Trophy
+    Trophy,
+    Loader2,
+    X,
+    BarChart3
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 interface TacticalDashboardProps {
     logs: BDPointLog[];
+    categories: Category[];
     selectedSet: 'total' | number | 'compare';
     onSetChange: (set: 'total' | number | 'compare') => void;
+    onClose?: () => void;
 }
 
 interface Category {
@@ -51,16 +56,17 @@ interface Category {
     category_group: 'offensive' | 'tactical' | 'error' | 'others';
 }
 
-export default function TacticalDashboard({ logs, selectedSet, onSetChange }: TacticalDashboardProps) {
-    const [categories, setCategories] = useState<Category[]>([]);
+export default function TacticalDashboard({ logs, categories, selectedSet, onSetChange, onClose }: TacticalDashboardProps) {
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [lastAnalysizedAt, setLastAnalysizedAt] = useState<number>(Date.now());
 
-    useEffect(() => {
-        const fetchCategories = async () => {
-            const { data, error } = await supabase.from('bd_point_categories').select('*');
-            if (!error && data) setCategories(data);
-        };
-        fetchCategories();
-    }, []);
+    const handleRunAnalysis = () => {
+        setIsAnalyzing(true);
+        setTimeout(() => {
+            setLastAnalysizedAt(Date.now());
+            setIsAnalyzing(false);
+        }, 1500);
+    };
 
     const calculateMetrics = (data: BDPointLog[]) => {
         const winners = data.filter(l => l.is_my_point);
@@ -74,12 +80,18 @@ export default function TacticalDashboard({ logs, selectedSet, onSetChange }: Ta
         const offensiveWinners = winners.filter(l => getCatGroup(l.point_type) === 'offensive');
         const tacticalWinners = winners.filter(l => getCatGroup(l.point_type) === 'tactical');
         const tacticalLosses = losses.filter(l => getCatGroup(l.point_type) === 'tactical');
+
+        // 실점 구분 고도화: 나의 범실 vs 상대 공격
         const unforcedErrors = losses.filter(l => getCatGroup(l.point_type) === 'error');
+        const forcedErrors = losses.filter(l => getCatGroup(l.point_type) !== 'error');
 
         // 서비스 지표 (정교함 및 집중도)
         const serviceWins = winners.filter(l => l.point_type.includes('서비스') || l.point_type.includes('서브'));
         const serviceErrors = losses.filter(l => l.point_type.includes('서비스 실수') || l.point_type.includes('서브 실수'));
-        const serviceIndex = (serviceWins.length / (serviceWins.length + serviceErrors.length || 1)) * 100;
+
+        // 데이터가 없을 경우 100점으로 처리하여 불필요한 경고 방지
+        const serviceTotal = serviceWins.length + serviceErrors.length;
+        const serviceIndex = serviceTotal === 0 ? 100 : (serviceWins.length / serviceTotal) * 100;
 
         // 클러치 기록 (15점 이후)
         const clutchLogs = data.filter(l => {
@@ -155,11 +167,16 @@ export default function TacticalDashboard({ logs, selectedSet, onSetChange }: Ta
         // 득점 기술 랭킹 (동적 추출 기반) - 시도 횟수(Attempt) 계산 로직 정교화
         const efficiencyData = allUsedWinningTypes.map(type => {
             const typeWinners = winners.filter(l => l.point_type === type).length;
-            // 시도 횟수 = 성공(type) + 해당 기술과 연관된 실점(type 키워드 포함 실점)
-            const typeFailures = losses.filter(l => l.point_type.includes(type)).length;
+            // 시도 횟수 = 성공(type) + 해당 기술과 연관된 '범실(Error)'
+            // 피습(상대 공격 성공)은 시도 횟수에서 제외하여 실제 본인의 기술 정밀도를 반영
+            const typeFailures = losses.filter(l =>
+                l.point_type.includes(type) &&
+                getCatGroup(l.point_type) === 'error'
+            ).length;
             const typeTotalAttempts = typeWinners + typeFailures;
 
             const successRate = (typeWinners / (typeTotalAttempts || 1)) * 100;
+            // 기여율 = 해당 기술 득점 / 전체 득점
             const contributionRate = (typeWinners / (winners.length || 1)) * 100;
 
             return {
@@ -174,11 +191,15 @@ export default function TacticalDashboard({ logs, selectedSet, onSetChange }: Ta
         // 실점 원인 랭킹 (동적 추출 기반)
         const errorRanking = allUsedErrorTypes.map(type => {
             const typeErrors = losses.filter(l => l.point_type === type).length;
+            // 기여율 = 해당 원인 실점 / 전체 실점
             const contributionRate = (typeErrors / (losses.length || 1)) * 100;
+            const isUnforced = getCatGroup(type) === 'error';
+
             return {
                 name: type,
                 count: typeErrors,
-                contributionRate: Math.round(contributionRate)
+                contributionRate: Math.round(contributionRate),
+                isUnforced
             };
         }).filter(d => d.count > 0).sort((a, b) => b.count - a.count);
 
@@ -217,7 +238,14 @@ export default function TacticalDashboard({ logs, selectedSet, onSetChange }: Ta
             };
         });
 
-        const bestShot = [...efficiencyData].sort((a, b) => b.rate - a.rate)[0];
+        const bestShotCandidate = [...efficiencyData]
+            .filter(d => {
+                const group = getCatGroup(d.name);
+                return group === 'offensive' || group === 'tactical';
+            })
+            .sort((a, b) => b.rate - a.rate)[0];
+
+        const bestShot = bestShotCandidate || efficiencyData[0];
         const mostError = errorRanking[0];
 
         // 6. Streak Analysis
@@ -240,8 +268,18 @@ export default function TacticalDashboard({ logs, selectedSet, onSetChange }: Ta
 
         // 7. 전략 제언 시스템 (Against same opponent)
         const strategyAdvice = [];
-        if (serviceIndex < 40) strategyAdvice.push("서비스 실수를 줄이는 것이 급선무입니다. 숏 서브의 높이를 낮게 유지하세요.");
+        if (serviceErrors.length > 0 && serviceIndex < 40) strategyAdvice.push("서비스 실수를 줄이는 것이 급선무입니다. 숏 서브의 높이를 낮게 유지하세요.");
         if (stabilityPI < 60) strategyAdvice.push("불안정한 연결구가 실점의 빌미를 줍니다. 셔틀콕을 더 높고 깊게 보내 여유를 확보하세요.");
+
+        // 실점 고도화 반영 전략
+        const unforcedCount = unforcedErrors.length;
+        const forcedCount = forcedErrors.length;
+        if (unforcedCount > forcedCount) {
+            strategyAdvice.push(`상대 공격보다 본인의 범실(${unforcedCount}회)로 인한 실점이 많습니다. 코스 공략보다는 정확한 임팩트에 집중하세요.`);
+        } else if (forcedCount > 0) {
+            strategyAdvice.push(`상대의 공격적인 위력(${forcedCount}회 실점 관여)에 고전하고 있습니다. 전진 수비보다는 반 스텝 물러나 수비 범위를 넓히세요.`);
+        }
+
         if (bestShot && bestShot.rate > 70) strategyAdvice.push(`${bestShot.name} 성공률(${bestShot.rate}%)이 경이적입니다. 랠리의 종결 지점으로 적극 설계하세요.`);
         if (mostError && mostError.count >= 3) strategyAdvice.push(`${mostError.name} 실점(${mostError.count}회)이 뼈아픕니다. 코스 선택 시 중앙보다는 코너를 노려 안전하게 처리하세요.`);
 
@@ -267,9 +305,11 @@ export default function TacticalDashboard({ logs, selectedSet, onSetChange }: Ta
             },
             swot: {
                 strength: bestShot ? `압도적인 성과를 내는 <strong>'${bestShot.name}'</strong>이(가) 핵심 병기입니다. ${bestShot.rate}%의 성공률로 랠리 종결력이 탁월합니다.` : '충분한 득점 데이터가 필요합니다.',
-                weakness: mostError && mostError.count >= 2 ? `<strong>'${mostError.name}'</strong> 상황에서의 범실(${mostError.count}회)이 주 실점 원인입니다. 타점 중심을 낮추고 안정적 임팩트가 필요합니다.` : '현재 큰 기술적 범실 약점은 보이지 않습니다.',
+                weakness: mostError && mostError.count >= 2 ? `<strong>'${mostError.name}'</strong> 상황에서의 ${mostError.isUnforced ? '범실' : '상대 공격 허용'}(${mostError.count}회)이 주 실점 원인입니다. ${mostError.isUnforced ? '타점 중심을 낮추고 안정적 임팩트가 필요합니다.' : '상대의 타점 포착을 방해하는 변칙적인 랠리 운용이 필요합니다.'}` : '현재 큰 기술적 범실 약점은 보이지 않습니다.',
                 opportunity: clutchPI < 40 ? '경기 후반부 점수 획득률이 낮습니다. 체력 안배와 정적인 템포 조절이 필요합니다.' : '후반부 집중력이 탁월합니다. 경기 중반까지만 대등하게 유지해도 승산이 큽니다.',
-                threat: serviceIndex < 50 ? '서브 범실 비중이 매우 위험합니다. 공짜 점수를 내주어 상대의 기세를 살려주고 있습니다.' : '안전한 서비스와 안정적인 운영으로 상대의 공격을 효과적으로 억제 중입니다.'
+                threat: serviceErrors.length > 0 && serviceIndex < 50
+                    ? '서브 범실 비중이 매우 위험합니다. 공짜 점수를 내주어 상대의 기세를 살려주고 있습니다.'
+                    : '안전한 서비스와 안정적인 운영으로 상대의 공격을 효과적으로 억제 중입니다.'
             },
             strategy: strategyAdvice.length > 0 ? strategyAdvice : ["현재 패턴을 유지하며 상대의 체력적 약점 노출 대기"]
         };
@@ -278,11 +318,11 @@ export default function TacticalDashboard({ logs, selectedSet, onSetChange }: Ta
     const currentData = useMemo(() => {
         if (selectedSet === 'total') return calculateMetrics(logs);
         if (typeof selectedSet === 'number') {
-            const setLogs = logs.filter(l => l.set_number === selectedSet);
+            const setLogs = logs.filter(l => Number(l.set_number || 1) === Number(selectedSet));
             return calculateMetrics(setLogs);
         }
         return null;
-    }, [logs, selectedSet, categories]);
+    }, [logs, selectedSet, categories, lastAnalysizedAt]);
 
     const compareMetrics = useMemo(() => {
         if (selectedSet !== 'compare') return null;
@@ -294,7 +334,7 @@ export default function TacticalDashboard({ logs, selectedSet, onSetChange }: Ta
                 metrics: calculateMetrics(setLogs)
             };
         }).filter(s => s.metrics !== null);
-    }, [logs, selectedSet, categories]);
+    }, [logs, selectedSet, categories, lastAnalysizedAt]);
 
     const { trendData, topShots } = useMemo(() => {
         const availableSets = Array.from(new Set(logs.map(l => l.set_number))).sort((a, b) => a - b);
@@ -331,7 +371,7 @@ export default function TacticalDashboard({ logs, selectedSet, onSetChange }: Ta
         return { trendData: data, topShots: dynamicTopShots };
     }, [logs, categories]);
 
-    const totalMetrics = useMemo(() => calculateMetrics(logs), [logs, categories]);
+    const totalMetrics = useMemo(() => calculateMetrics(logs), [logs, categories, lastAnalysizedAt]);
 
     if (logs.length < 3) {
         return (
@@ -347,8 +387,26 @@ export default function TacticalDashboard({ logs, selectedSet, onSetChange }: Ta
 
     return (
         <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-1000">
+            {/* Mobile Header (Only if onClose is provided) */}
+            {onClose && (
+                <div className="md:hidden sticky top-0 z-[60] bg-slate-950/80 backdrop-blur-xl -mx-4 px-4 py-4 flex items-center justify-between border-b border-white/10 mb-4">
+                    <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
+                            <BarChart3 className="w-4 h-4 text-white" />
+                        </div>
+                        <h2 className="text-lg font-black text-white">경기 상세 분석</h2>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        className="p-2 rounded-xl bg-white/10 text-white active:bg-white/20 transition"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+            )}
+
             {/* 1. 컨트롤 패널 (전문적인 분석 도구 느낌) - Sticky Navigation */}
-            <div className="sticky top-4 z-50 flex flex-wrap items-center justify-between gap-6 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl p-3 rounded-[32px] border border-slate-200/50 dark:border-slate-800/50 shadow-lg mb-8">
+            <div className="sticky top-4 z-50 flex flex-wrap items-center justify-between gap-6 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl p-3 rounded-[32px] border border-slate-200/50 dark:border-slate-800/50 shadow-lg mb-8 relative">
                 <div className="flex items-center gap-2">
                     {([1, 2, 3, 'compare', 'total'] as const).map(tab => {
                         const isAvailable = tab === 'total' || tab === 'compare' || logs.some(l => l.set_number === tab);
@@ -370,17 +428,45 @@ export default function TacticalDashboard({ logs, selectedSet, onSetChange }: Ta
                         );
                     })}
                 </div>
-                {selectedSet !== 'compare' && currentData && (
-                    <div className="flex items-center gap-6 px-4">
-                        <div className="flex flex-col items-end">
-                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">공격 효율</span>
-                            <span className="text-lg font-black text-slate-900 dark:text-white">{Math.round((currentData!.winPoints / currentData!.totalPoints) * 100)}% <span className="text-[10px] text-slate-400 font-bold ml-0.5">승률</span></span>
+
+                <div className="flex items-center gap-4">
+                    {selectedSet !== 'compare' && currentData && (
+                        <div className="flex items-center gap-6 px-4">
+                            <div className="flex flex-col items-end">
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">공격 효율</span>
+                                <span className="text-lg font-black text-slate-900 dark:text-white">{Math.round((currentData!.winPoints / currentData!.totalPoints) * 100)}% <span className="text-[10px] text-slate-400 font-bold ml-0.5">승률</span></span>
+                            </div>
+                            <div className="h-8 w-px bg-slate-200 dark:bg-slate-800" />
+                            <div className="flex flex-col items-end">
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">분석 규모</span>
+                                <span className="text-lg font-black text-slate-900 dark:text-white">{currentData.totalPoints} <span className="text-[10px] text-slate-400 font-bold ml-0.5">랠리</span></span>
+                            </div>
                         </div>
-                        <div className="h-8 w-px bg-slate-200 dark:bg-slate-800" />
-                        <div className="flex flex-col items-end">
-                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">분석 규모</span>
-                            <span className="text-lg font-black text-slate-900 dark:text-white">{currentData.totalPoints} <span className="text-[10px] text-slate-400 font-bold ml-0.5">랠리</span></span>
-                        </div>
+                    )}
+
+                    {/* Run AI Analysis Button */}
+                    <button
+                        onClick={handleRunAnalysis}
+                        disabled={isAnalyzing}
+                        className={cn(
+                            "flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-sm transition-all shadow-lg active:scale-95 whitespace-nowrap",
+                            isAnalyzing
+                                ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                                : "bg-blue-600 text-white hover:bg-blue-500 shadow-blue-500/20"
+                        )}
+                    >
+                        {isAnalyzing ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                            <Sparkles className="w-4 h-4" />
+                        )}
+                        {selectedSet === 'total' ? '전체 AI 분석 실행' : `${selectedSet}세트 AI 분석`}
+                    </button>
+                </div>
+
+                {isAnalyzing && (
+                    <div className="absolute inset-x-0 -bottom-1 h-1 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-blue-500 animate-progress" style={{ width: '40%' }} />
                     </div>
                 )}
             </div>
@@ -409,10 +495,9 @@ export default function TacticalDashboard({ logs, selectedSet, onSetChange }: Ta
                                 const totalWinners = trendData.reduce((acc, curr) => acc + (curr[shot] || 0), 0);
 
                                 return (
-                                    <div key={shot} className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-[32px] border border-slate-100 dark:border-slate-800 transition-all hover:shadow-lg">
+                                    <div key={shot} className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-[32px] border border-slate-100 dark:border-slate-800 transition-all hover:shadow-lg overflow-hidden">
                                         <div className="flex items-center justify-between mb-6">
                                             <div>
-                                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">{shot} TREND</span>
                                                 <h4 className="text-lg font-black text-slate-900 dark:text-white">{shot}</h4>
                                             </div>
                                             <div className="text-right">
@@ -423,7 +508,7 @@ export default function TacticalDashboard({ logs, selectedSet, onSetChange }: Ta
 
                                         <div className="h-[120px] w-full">
                                             <ResponsiveContainer width="100%" height="100%">
-                                                <LineChart data={trendData}>
+                                                <LineChart data={trendData} margin={{ top: 25, right: 35, left: 35, bottom: 5 }}>
                                                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} strokeOpacity={0.5} />
                                                     <XAxis
                                                         dataKey="set"
@@ -740,6 +825,22 @@ export default function TacticalDashboard({ logs, selectedSet, onSetChange }: Ta
                 </div>
             ) : currentData && (
                 <>
+                    {/* 0. Scanning Overlay during Analysis */}
+                    {isAnalyzing && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/20 backdrop-blur-md animate-in fade-in duration-300">
+                            <div className="bg-white dark:bg-slate-900 p-10 rounded-[48px] shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col items-center gap-6 scale-110">
+                                <div className="relative">
+                                    <div className="w-24 h-24 rounded-full border-4 border-blue-500/20 border-t-blue-500 animate-spin" />
+                                    <Sparkles className="absolute inset-0 m-auto w-10 h-10 text-blue-500 animate-pulse" />
+                                </div>
+                                <div className="text-center">
+                                    <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-2">AI 전술 엔진 스캔 중</h3>
+                                    <p className="text-slate-500 font-bold text-sm tracking-tight">수집된 랠리 데이터를 바탕으로 최적의 전략을 도출하고 있습니다...</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* 1. Technical Ranking Dashboard (Scoring & Error Rankings + Clutch) */}
                     <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 mb-12">
                         {/* Scoring Ranking Card */}
@@ -762,37 +863,46 @@ export default function TacticalDashboard({ logs, selectedSet, onSetChange }: Ta
                                         const medals = ['🥇', '🥈', '🥉', '4위', '5위'];
                                         const maxVal = Math.max(...currentData.efficiency.map((d: any) => d.winners));
                                         const barPct = maxVal > 0 ? (item.winners / maxVal) * 100 : 0;
-                                        const opacities = [1, 0.88, 0.78, 0.68, 0.58];
-                                        const bgAlphas = ['bg-blue-50 dark:bg-blue-900/20', 'bg-blue-50/80 dark:bg-blue-900/15', 'bg-blue-50/60 dark:bg-blue-900/10', 'bg-slate-50 dark:bg-slate-900/30', 'bg-slate-50 dark:bg-slate-900/20'];
+                                        const opacities = [1, 0.9, 0.8, 0.7, 0.6];
+                                        const bgAlphas = ['bg-blue-50/50 dark:bg-blue-900/10', 'bg-blue-50/30 dark:bg-blue-900/5', 'bg-transparent', 'bg-transparent', 'bg-transparent'];
+
                                         return (
                                             <div
                                                 key={item.name}
-                                                className={`rounded-2xl px-4 py-3 border border-blue-100/60 dark:border-white/5 ${bgAlphas[index]} transition-all duration-200 hover:shadow-md hover:scale-[1.01]`}
+                                                className={`rounded-2xl px-3 py-2 border border-transparent hover:border-blue-100 dark:hover:border-white/5 ${bgAlphas[index]} transition-all duration-200 group/item`}
                                                 style={{ opacity: opacities[index] }}
                                             >
                                                 <div className="flex items-center gap-3">
                                                     {/* Rank badge */}
-                                                    <div className="text-xl w-8 text-center flex-shrink-0">{medals[index]}</div>
-                                                    {/* Name + bar */}
+                                                    <div className="text-lg w-7 text-center flex-shrink-0 font-bold text-slate-400">{medals[index]}</div>
+
                                                     <div className="flex-1 min-w-0">
-                                                        <div className="flex items-baseline justify-between gap-2 mb-1">
-                                                            <span className="text-sm font-black text-slate-800 dark:text-white truncate">{item.name}</span>
-                                                            <span className="text-base font-black text-blue-600 dark:text-blue-400 tabular-nums flex-shrink-0">
-                                                                {item.winners}<span className="text-xs text-slate-500 font-semibold">/{item.attempts}회</span>
-                                                            </span>
+                                                        <div className="flex items-center justify-between mb-1.5">
+                                                            <div className="flex items-baseline gap-3 min-w-0">
+                                                                <span className="text-sm font-black text-slate-900 dark:text-white truncate">{item.name}</span>
+                                                                <div className="flex items-center gap-3 whitespace-nowrap">
+                                                                    <div className="flex items-baseline gap-1">
+                                                                        <span className="text-[10px] font-bold text-slate-400 uppercase">성공</span>
+                                                                        <span className="text-base font-black text-indigo-500 tabular-nums">{item.rate}%</span>
+                                                                    </div>
+                                                                    <div className="flex items-baseline gap-1 border-l border-slate-200 dark:border-white/10 pl-3">
+                                                                        <span className="text-[10px] font-bold text-slate-400 uppercase">기여</span>
+                                                                        <span className="text-base font-black text-blue-500 tabular-nums">{item.contributionRate}%</span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex-shrink-0 text-right">
+                                                                <span className="text-sm font-black text-slate-400 tabular-nums">
+                                                                    {item.winners}<span className="text-[10px] opacity-60 ml-0.5">/{item.attempts}</span>
+                                                                </span>
+                                                            </div>
                                                         </div>
                                                         {/* Progress bar */}
-                                                        <div className="h-2 rounded-full bg-blue-100 dark:bg-blue-900/30 overflow-hidden">
+                                                        <div className="h-1.5 rounded-full bg-slate-100 dark:bg-white/5 overflow-hidden">
                                                             <div
-                                                                className="h-full rounded-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-700"
+                                                                className="h-full rounded-full bg-gradient-to-r from-blue-500 via-blue-400 to-indigo-500 transition-all duration-700 shadow-[0_0_8px_rgba(59,130,246,0.5)]"
                                                                 style={{ width: `${barPct}%` }}
                                                             />
-                                                        </div>
-                                                        {/* Metrics row */}
-                                                        <div className="flex items-center gap-3 mt-1.5">
-                                                            <span className="text-[10px] font-bold text-indigo-500">성공률 {item.rate}%</span>
-                                                            <span className="text-[10px] text-slate-300">|</span>
-                                                            <span className="text-[10px] font-bold text-blue-400">기여율 {item.contributionRate}%</span>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -825,35 +935,42 @@ export default function TacticalDashboard({ logs, selectedSet, onSetChange }: Ta
                                         const medals = ['🥇', '🥈', '🥉', '4위', '5위'];
                                         const maxVal = Math.max(...currentData.errorRanking.map((d: any) => d.count));
                                         const barPct = maxVal > 0 ? (item.count / maxVal) * 100 : 0;
-                                        const opacities = [1, 0.88, 0.78, 0.68, 0.58];
-                                        const bgAlphas = ['bg-rose-50 dark:bg-rose-900/20', 'bg-rose-50/80 dark:bg-rose-900/15', 'bg-rose-50/60 dark:bg-rose-900/10', 'bg-slate-50 dark:bg-slate-900/30', 'bg-slate-50 dark:bg-slate-900/20'];
+                                        const opacities = [1, 0.9, 0.8, 0.7, 0.6];
+                                        const bgAlphas = ['bg-rose-50/50 dark:bg-rose-900/10', 'bg-rose-50/30 dark:bg-rose-900/5', 'bg-transparent', 'bg-transparent', 'bg-transparent'];
+
                                         return (
                                             <div
                                                 key={item.name}
-                                                className={`rounded-2xl px-4 py-3 border border-rose-100/60 dark:border-white/5 ${bgAlphas[index]} transition-all duration-200 hover:shadow-md hover:scale-[1.01]`}
+                                                className={`rounded-2xl px-3 py-2 border border-transparent hover:border-rose-100 dark:hover:border-white/5 ${bgAlphas[index]} transition-all duration-200 group/item`}
                                                 style={{ opacity: opacities[index] }}
                                             >
                                                 <div className="flex items-center gap-3">
                                                     {/* Rank badge */}
-                                                    <div className="text-xl w-8 text-center flex-shrink-0">{medals[index]}</div>
-                                                    {/* Name + bar */}
+                                                    <div className="text-lg w-7 text-center flex-shrink-0 font-bold text-slate-400">{medals[index]}</div>
+
                                                     <div className="flex-1 min-w-0">
-                                                        <div className="flex items-baseline justify-between gap-2 mb-1">
-                                                            <span className="text-sm font-black text-slate-800 dark:text-white truncate">{item.name}</span>
-                                                            <span className="text-base font-black text-rose-500 tabular-nums flex-shrink-0">
-                                                                {item.count}<span className="text-xs text-slate-500 font-semibold">회 실점</span>
-                                                            </span>
+                                                        <div className="flex items-center justify-between mb-1.5">
+                                                            <div className="flex items-baseline gap-3 min-w-0">
+                                                                <span className="text-sm font-black text-slate-900 dark:text-white truncate">{item.name}</span>
+                                                                <div className="flex items-center gap-2 whitespace-nowrap">
+                                                                    <div className="flex items-baseline gap-1">
+                                                                        <span className="text-[10px] font-bold text-slate-400 uppercase">기여</span>
+                                                                        <span className="text-base font-black text-rose-500 tabular-nums">{item.contributionRate}%</span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex-shrink-0 text-right">
+                                                                <span className="text-sm font-black text-slate-400 tabular-nums">
+                                                                    {item.count}<span className="text-[10px] opacity-60 ml-0.5">회</span>
+                                                                </span>
+                                                            </div>
                                                         </div>
                                                         {/* Progress bar */}
-                                                        <div className="h-2 rounded-full bg-rose-100 dark:bg-rose-900/30 overflow-hidden">
+                                                        <div className="h-1.5 rounded-full bg-slate-100 dark:bg-white/5 overflow-hidden border border-transparent">
                                                             <div
-                                                                className="h-full rounded-full bg-gradient-to-r from-rose-500 to-rose-400 transition-all duration-700"
+                                                                className="h-full rounded-full bg-gradient-to-r from-rose-500 via-rose-400 to-pink-500 transition-all duration-700 shadow-[0_0_8px_rgba(244,63,94,0.4)]"
                                                                 style={{ width: `${barPct}%` }}
                                                             />
-                                                        </div>
-                                                        {/* Metrics row */}
-                                                        <div className="flex items-center gap-3 mt-1.5">
-                                                            <span className="text-[10px] font-bold text-orange-500">기여율 {item.contributionRate}%</span>
                                                         </div>
                                                     </div>
                                                 </div>

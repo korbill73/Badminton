@@ -85,7 +85,7 @@ export default function Sidebar() {
             </div>
 
             {/* Mobile Bottom Navigation */}
-            <div className="lg:hidden fixed bottom-6 left-4 right-4 z-[100] h-16 bg-[#0f172a]/90 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex items-center justify-around px-2">
+            <div className="lg:hidden fixed bottom-0 left-0 right-0 z-[100] h-16 bg-[#0f172a]/95 backdrop-blur-xl border-t border-slate-700/50 flex items-center justify-around px-2 pb-safe shadow-[0_-10px_40px_rgba(0,0,0,0.3)]">
                 {[...navItems.slice(0, 4)].map((item) => {
                     const isActive = pathname === item.href;
                     return (
@@ -100,7 +100,7 @@ export default function Sidebar() {
                             <item.icon className={cn("w-5 h-5", isActive && "animate-in zoom-in-75 duration-300")} />
                             <span className="text-[9px] font-black uppercase tracking-tighter">{item.name}</span>
                             {isActive && (
-                                <div className="absolute -top-1 w-1 h-1 bg-blue-500 rounded-full transition-all animate-in fade-in zoom-in duration-500" />
+                                <div className="absolute top-0 w-8 h-1 bg-blue-500 rounded-b-lg transition-all animate-in slide-in-from-top-1 duration-500" />
                             )}
                         </Link>
                     );
@@ -121,27 +121,28 @@ export default function Sidebar() {
                 {/* Mobile Menu Overlay */}
                 {isMenuOpen && (
                     <>
-                        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[-1] animate-in fade-in duration-300" onClick={() => setIsMenuOpen(false)} />
-                        <div className="absolute bottom-20 right-0 w-48 bg-[#0f172a] border border-slate-700 rounded-2xl p-2 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
+                        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[-1] animate-in fade-in duration-300" onClick={() => setIsMenuOpen(false)} />
+                        <div className="absolute bottom-16 right-0 w-56 bg-[#0f172a] border-t border-l border-slate-700 rounded-tl-3xl p-3 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
                             <div className="flex items-center gap-3 p-3 border-b border-slate-800 mb-2">
-                                <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-white text-xs">JD</div>
+                                <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white text-sm font-bold">JD</div>
                                 <div className="min-w-0">
-                                    <p className="text-xs font-bold text-white truncate">홍길동 선수</p>
+                                    <p className="text-sm font-bold text-white truncate">홍길동 선수</p>
+                                    <p className="text-[10px] text-slate-500">Pro Team Member</p>
                                 </div>
                             </div>
                             <Link
                                 href="/performance"
-                                className="flex items-center gap-3 px-3 py-2.5 text-xs font-bold text-slate-400 hover:text-white rounded-lg"
+                                className="flex items-center gap-3 px-3 py-3 text-sm font-bold text-slate-400 hover:text-white rounded-xl hover:bg-white/5"
                                 onClick={() => setIsMenuOpen(false)}
                             >
                                 <Activity className="w-4 h-4" />
                                 <span>트레이닝 지표</span>
                             </Link>
-                            <button className="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-bold text-slate-400 hover:text-white rounded-lg">
+                            <button className="w-full flex items-center gap-3 px-3 py-3 text-sm font-bold text-slate-400 hover:text-white rounded-xl hover:bg-white/5">
                                 <Settings className="w-4 h-4" />
                                 <span>설정</span>
                             </button>
-                            <button className="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-bold text-red-400 hover:bg-red-500/10 rounded-lg">
+                            <button className="w-full flex items-center gap-3 px-3 py-3 text-sm font-bold text-red-400 hover:bg-red-500/10 rounded-xl mt-2">
                                 <LogOut className="w-4 h-4" />
                                 <span>로그아웃</span>
                             </button>

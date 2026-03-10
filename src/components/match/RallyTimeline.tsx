@@ -83,40 +83,38 @@ export default function RallyTimeline({
         return found;
     }, [logs, activeTime]);
 
-    // Auto-scroll to active index (Internal only, preventing window jump)
+    // Combined Auto-scroll logic
     useEffect(() => {
-        if (activeIndex >= 0) {
-            const container = document.getElementById('rally-timeline-scroll-container');
+        const container = document.getElementById('rally-timeline-scroll-container');
+        if (!container) return;
+
+        // 1. Priority: Scroll to newly added log
+        if (lastAddedId) {
+            const el = document.getElementById(`rally-log-${lastAddedId}`);
+            if (el) {
+                // Use a small timeout to ensure DOM is fully painted
+                const timeoutId = setTimeout(() => {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 100);
+                return () => clearTimeout(timeoutId);
+            }
+            return;
+        }
+
+        // 2. Secondary: Scroll to active index (video sync)
+        if (activeIndex >= 0 && logs[activeIndex]) {
             const el = document.getElementById(`rally-log-${logs[activeIndex].id}`);
-            if (container && el) {
+            if (el) {
                 const containerRect = container.getBoundingClientRect();
                 const elRect = el.getBoundingClientRect();
 
                 // Only scroll if outside the visible area of the container
                 if (elRect.top < containerRect.top || elRect.bottom > containerRect.bottom) {
-                    container.scrollTo({
-                        top: el.offsetTop - container.offsetTop - 10,
-                        behavior: 'smooth'
-                    });
+                    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                 }
             }
         }
-    }, [activeIndex, logs]);
-
-    // Auto-scroll to newly added log
-    useEffect(() => {
-        if (lastAddedId) {
-            const container = document.getElementById('rally-timeline-scroll-container');
-            const el = document.getElementById(`rally-log-${lastAddedId}`);
-            if (container && el) {
-                // Scroll the newly added log into the center of the container
-                container.scrollTo({
-                    top: el.offsetTop - container.offsetTop - (container.clientHeight / 2) + (el.clientHeight / 2),
-                    behavior: 'smooth'
-                });
-            }
-        }
-    }, [lastAddedId]);
+    }, [activeIndex, logs, lastAddedId]);
 
 
     return (

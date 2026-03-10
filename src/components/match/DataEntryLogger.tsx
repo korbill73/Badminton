@@ -3,42 +3,17 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import {
-    Clock,
     Plus,
-    Minus,
     Loader2,
-    Trophy,
-    AlertCircle,
-    Info,
-    Sparkles,
-    ChevronRight,
-    MousePointer2,
-    CheckCircle2,
     Settings2,
     Trash2,
-    Edit2,
     Save,
-    X,
-    ListPlus,
     SquarePen,
-    Zap,
-    Cpu,
     Target,
+    Zap,
+    AlertCircle,
+    X,
 } from 'lucide-react';
-import {
-    ResponsiveContainer,
-    RadarChart,
-    PolarGrid,
-    PolarAngleAxis,
-    PolarRadiusAxis,
-    Radar,
-    XAxis,
-    YAxis,
-    BarChart,
-    Bar,
-    Cell
-} from 'recharts';
-import CategorySelectModal from './CategorySelectModal';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { BDPointLog } from '@/types';
@@ -56,20 +31,20 @@ interface Category {
     type: 'winner' | 'loss';
     category_group: 'offensive' | 'tactical' | 'error' | 'others';
     is_default: boolean;
+    display_order?: number;
 }
 
 interface DataEntryLoggerProps {
     player: any;
     matchId: string;
     onLogAdded: (log: any) => void;
-    initialScoreMe?: number;
-    initialScoreOpp?: number;
+    onLogsAdded?: (logs: any[]) => Promise<void>;
     currentSet: number;
     onSetChange: (set: number) => void;
     categories: Category[];
     logs: BDPointLog[];
     onCategoryChange?: () => void;
-    lastTimestamp?: number;
+    match?: any;
 }
 
 export default function DataEntryLogger({
@@ -77,7 +52,6 @@ export default function DataEntryLogger({
     matchId,
     onLogAdded,
     currentSet,
-    onSetChange,
     categories,
     logs,
     onCategoryChange,
@@ -87,89 +61,70 @@ export default function DataEntryLogger({
     const [customType, setCustomType] = useState<string>('');
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editName, setEditName] = useState('');
-
     const [showCustom, setShowCustom] = useState(false);
     const [customTarget, setCustomTarget] = useState<{ type: CategoryType; group: CategoryGroup } | null>(null);
+    const [draggedId, setDraggedId] = useState<string | null>(null);
+    const [localOrder, setLocalOrder] = useState<string[]>([]);
+    const [isManageModalOpen, setIsManageModalOpen] = useState(false);
 
-    const radarMetrics = React.useMemo(() => {
-        const winners = logs.filter(l => l.is_my_point);
-        const losses = logs.filter(l => !l.is_my_point);
-        const total = logs.length;
-        if (total === 0) return [
-            { subject: '공격력', A: 0, fullMark: 100 },
-            { subject: '정교함', A: 0, fullMark: 100 },
-            { subject: '안정성', A: 0, fullMark: 100 },
-            { subject: '위기관리', A: 0, fullMark: 100 },
-            { subject: '기술 다양성', A: 0, fullMark: 100 },
-        ];
+    // Initialize/Update local order when categories change
+    useEffect(() => {
+        if (categories.length > 0) {
+            setLocalOrder(categories.map(c => c.id));
+        }
+    }, [categories]);
 
-        const getCatGroup = (name: string) => categories.find(c => c.name === name)?.category_group || 'others';
+    // Keyboard Shortcuts (Stay active even if buttons are hidden)
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
-        // 1. 공격력 (Power)
-        const offensiveWinners = winners.filter(l => getCatGroup(l.point_type) === 'offensive');
-        const powerPI = (offensiveWinners.length / (winners.length || 1)) * 100;
+            switch (e.key.toLowerCase()) {
+                case 'w':
+                    handleQuickRecord(true);
+                    break;
+                case 's':
+                    handleQuickRecord(false);
+                    break;
+                case ' ':
+                    e.preventDefault();
+                    if (player) {
+                        const state = player.getPlayerState();
+                        if (state === 1) player.pauseVideo();
+                        else player.playVideo();
+                    }
+                    break;
+                case 'a':
+                    if (player) player.seekTo(player.getCurrentTime() - 5);
+                    break;
+                case 'd':
+                    if (player) player.seekTo(player.getCurrentTime() + 5);
+                    break;
+            }
+        };
 
-        // 2. 정교함 (Control)
-        const tacticalWinners = winners.filter(l => getCatGroup(l.point_type) === 'tactical');
-        const tacticalLosses = losses.filter(l => getCatGroup(l.point_type) === 'tactical');
-        const controlPI = (tacticalWinners.length / (tacticalWinners.length + tacticalLosses.length || 1)) * 100;
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [player, logs, currentSet]);
 
-        // 3. 안정성 (Stability)
-        const unforcedErrors = losses.filter(l => getCatGroup(l.point_type) === 'error');
-        const stabilityPI = ((total - unforcedErrors.length) / total) * 100;
-
-        // 4. 위기관리 (Clutch) - 15점 이후
-        const clutchLogs = logs.filter(l => {
-            const [me, opp] = (l.current_score || '0-0').split('-').map(Number);
-            return (me >= 15 || opp >= 15);
-        });
-        const clutchWinners = clutchLogs.filter(l => l.is_my_point);
-        const clutchPI = (clutchWinners.length / (clutchLogs.length || 1)) * 100;
-
-        // 5. 기술 다양성 (Variety)
-        const uniqueWinningTypes = new Set(winners.map(l => l.point_type)).size;
-        const varietyPI = Math.min(100, (uniqueWinningTypes / 6) * 100);
-
-        return [
-            { subject: '공격력', A: Math.round(powerPI), fullMark: 100 },
-            { subject: '정교함', A: Math.round(controlPI), fullMark: 100 },
-            { subject: '안정성', A: Math.round(stabilityPI), fullMark: 100 },
-            { subject: '위기관리', A: Math.round(clutchPI), fullMark: 100 },
-            { subject: '기술 다양성', A: Math.round(varietyPI), fullMark: 100 },
-        ];
-    }, [logs, categories]);
-
-    // Calculate Technique Metrics
-    const techniqueMetrics = React.useMemo(() => {
-        const winnerCats = categories.filter(c => c.type === 'winner');
-        return winnerCats.map(cat => {
-            const successes = logs.filter(l => l.is_my_point && l.point_type === cat.name).length;
-            const failures = logs.filter(l => !l.is_my_point && l.point_type.includes(cat.name) && l.point_type.includes('실수')).length;
-            const attempts = successes + failures;
-            const rate = attempts > 0 ? Math.round((successes / attempts) * 100) : 0;
-            return {
-                name: cat.name,
-                successes,
-                failures,
-                attempts,
-                rate
-            };
-        }).filter(m => m.attempts > 0)
-            .sort((a, b) => b.attempts - a.attempts);
-    }, [logs, categories]);
-
-    const maxAttempts = React.useMemo(() => {
-        return Math.max(...techniqueMetrics.map(m => m.attempts), 1);
-    }, [techniqueMetrics]);
+    const handleQuickRecord = (isMyPoint: boolean) => {
+        if (!player) return;
+        handleAddLog(isMyPoint, isMyPoint ? '득점' : '실점');
+    };
 
     const handleAddLog = async (isWinner: boolean, pointType: string) => {
         if (submitting) return;
         setSubmitting(true);
 
+        // 기록 시작 시 영상 일시정지
+        if (player) {
+            player.pauseVideo();
+        }
+
         try {
-            // Calculate approximate next score locally to avoid '0-0' flash/reset
-            const currentMe = logs.filter(l => l.is_my_point).length;
-            const currentOpp = logs.filter(l => !l.is_my_point).length;
+            const currentSetLogs = logs.filter(l => (l.set_number || 1) === currentSet);
+            const currentMe = currentSetLogs.filter(l => l.is_my_point).length;
+            const currentOpp = currentSetLogs.filter(l => !l.is_my_point).length;
             const nextScore = isWinner ? `${currentMe + 1}-${currentOpp}` : `${currentMe}-${currentOpp + 1}`;
 
             const timestamp = player ? Math.floor(player.getCurrentTime()) : 0;
@@ -187,7 +142,13 @@ export default function DataEntryLogger({
                 .single();
 
             if (error) throw error;
-            if (data) onLogAdded(data);
+            if (data) {
+                onLogAdded(data);
+                // 점수 기록 후 영상 자동 재생
+                if (player) {
+                    player.playVideo();
+                }
+            }
         } catch (err: any) {
             alert('기록 저장 중 오류: ' + err.message);
         } finally {
@@ -199,13 +160,19 @@ export default function DataEntryLogger({
         if (!customType.trim() || !customTarget) return;
         const { type, group } = customTarget;
         try {
+            // Get the max display_order to append at the end
+            const maxOrder = categories.length > 0
+                ? Math.max(...categories.map(c => (c as any).display_order || 0))
+                : 0;
+
             const { error } = await supabase
                 .from('bd_point_categories')
                 .insert([{
                     name: customType.trim(),
                     type,
                     category_group: group,
-                    is_default: false
+                    is_default: false,
+                    display_order: maxOrder + 1
                 }]);
             if (error) throw error;
             setCustomType('');
@@ -214,6 +181,38 @@ export default function DataEntryLogger({
             onCategoryChange?.();
         } catch (err: any) {
             alert('카테고리 생성 중 오류: ' + err.message);
+        }
+    };
+
+    const handleSaveOrder = async () => {
+        if (localOrder.length === 0) return;
+        setSubmitting(true);
+        try {
+            // Update display_order for all categories in the current local order
+            // Fix: Send full objects to avoid NOT NULL constraint violations on upsert
+            const updates = localOrder.map((id, index) => {
+                const original = categories.find(c => c.id === id);
+                if (!original) return null;
+                return {
+                    ...original,
+                    display_order: index
+                };
+            }).filter((u): u is any => u !== null);
+
+            if (updates.length === 0) return;
+
+            const { error } = await supabase
+                .from('bd_point_categories')
+                .upsert(updates, { onConflict: 'id' });
+
+            if (error) throw error;
+            onCategoryChange?.();
+        } catch (err: any) {
+            console.error('순서 저장 실패:', err);
+            const errorMessage = err.message || (typeof err === 'object' ? JSON.stringify(err) : '알 수 없는 오류');
+            alert(`순서 저장 중 오류가 발생했습니다: ${errorMessage}\n\n상세 내용: ${err.details || '없음'}`);
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -240,117 +239,189 @@ export default function DataEntryLogger({
                 .delete()
                 .eq('id', id);
             if (error) throw error;
-            await onCategoryChange?.();
+            onCategoryChange?.();
         } catch (err: any) {
             alert('카테고리 삭제 중 오류: ' + err.message);
         }
     };
 
-    const renderAddButton = (type: 'winner' | 'loss', group: 'offensive' | 'tactical' | 'error' | 'others') => {
-        const isAddingThis = showCustom && (
-            (type === 'winner' && (group === 'offensive' || group === 'others')) ||
-            (type === 'loss' && (group === 'error' || group === 'others'))
-        );
-
-        if (isAddingThis) {
-            return (
-                <div key="adding" className="col-span-2 md:col-span-2 flex flex-col gap-2 bg-slate-900/90 backdrop-blur-md p-2 rounded-xl border-2 border-cyan-500 shadow-[0_0_15px_rgba(0,242,255,0.4)] animate-in zoom-in-95 h-11 justify-center">
-                    <div className="flex items-center gap-1.5 bg-slate-800/50 px-2 py-1 rounded-lg border border-slate-700">
-                        <input
-                            type="text"
-                            placeholder="명칭 입력..."
-                            value={customType}
-                            onChange={(e) => setCustomType(e.target.value)}
-                            className="w-full px-1 py-0.5 text-[12px] font-bold border-none focus:ring-0 bg-transparent text-white placeholder:text-slate-500"
-                            autoFocus
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleCreateCategory();
-                                if (e.key === 'Escape') { setShowCustom(false); setCustomTarget(null); }
-                            }}
-                        />
-                        <button
-                            onClick={() => handleCreateCategory()}
-                            className="p-1 bgColor-blue-600 text-white hover:bg-blue-700 rounded-md shrink-0 transition-all active:scale-95"
-                        >
-                            <Save className="w-4 h-4" />
-                        </button>
-                    </div>
-                </div>
-            );
-        }
+    const renderCategoryHeader = (title: string, icon: React.ReactNode, type: CategoryType, group: CategoryGroup, subTitle?: string) => {
+        // Fix: for 'loss' type, show add input if ANY loss group is being added
+        const isAddingThis = showCustom && customTarget?.type === type && (type === 'winner' ? customTarget?.group === group : true);
 
         return (
-            <button
-                key="add-trigger"
-                onClick={() => { setShowCustom(true); setCustomTarget({ type, group }); setCustomType(''); }}
-                className={cn(
-                    "w-full h-12 px-4 rounded-xl border text-[11px] font-bold transition-all flex items-center justify-center gap-2 group active:scale-95 shadow-sm uppercase tracking-widest leading-none",
-                    type === 'winner'
-                        ? "text-cyan-400 border-cyan-500/20 bg-cyan-500/5 hover:bg-cyan-500/15 hover:border-cyan-500/60"
-                        : "text-rose-400 border-rose-500/20 bg-rose-500/5 hover:bg-rose-500/15 hover:border-rose-500/60"
-                )}
-            >
-                <Plus className="w-3.5 h-3.5 group-hover:rotate-180 transition-transform duration-500" />
-                <span className="whitespace-nowrap">기술 등록</span>
-            </button>
+            <div className="flex items-center justify-between px-1 mb-1.5 shrink-0">
+                <div className="flex items-center gap-1.5">
+                    {icon}
+                    <span className={cn(
+                        "text-[11px] font-black tracking-tighter uppercase",
+                        type === 'winner' ? "text-cyan-400" : "text-rose-400"
+                    )}>{title}</span>
+                    {subTitle && (
+                        <span className="text-[8px] font-bold text-slate-500/60 uppercase tracking-widest ml-1">{subTitle}</span>
+                    )}
+                </div>
+
+                <div className="flex items-center gap-1">
+                    {isAddingThis ? (
+                        <div className="flex items-center gap-1 bg-slate-800 px-1 py-0.5 rounded border border-cyan-500/50 animate-in slide-in-from-right-2 duration-200">
+                            <input
+                                type="text"
+                                placeholder={`${title} 추가...`}
+                                value={customType}
+                                onChange={(e) => setCustomType(e.target.value)}
+                                className="w-[80px] px-1 py-0 text-[10px] font-bold border-none focus:ring-0 bg-transparent text-white placeholder:text-slate-600"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleCreateCategory();
+                                    if (e.key === 'Escape') { setShowCustom(false); setCustomTarget(null); }
+                                }}
+                            />
+                            <button onClick={() => handleCreateCategory()} className="p-0.5 text-cyan-400 hover:text-cyan-300">
+                                <Save className="w-3 h-3" />
+                            </button>
+                            <button onClick={() => { setShowCustom(false); setCustomTarget(null); }} className="p-0.5 text-slate-500">
+                                <X className="w-3 h-3" />
+                            </button>
+                        </div>
+                    ) : type === 'loss' ? (
+                        <div className="flex items-center gap-1">
+                            <button
+                                onClick={() => { setShowCustom(true); setCustomTarget({ type: 'loss', group: 'error' }); setCustomType(''); }}
+                                className="px-1.5 py-1 rounded bg-rose-500/10 text-rose-500/60 hover:text-rose-400 text-[9px] font-black border border-rose-500/20 flex items-center gap-1 group/add underline-offset-2 hover:underline"
+                            >
+                                <Plus className="w-2.5 h-2.5" /> 범실
+                            </button>
+                            <button
+                                onClick={() => { setShowCustom(true); setCustomTarget({ type: 'loss', group: 'others' }); setCustomType(''); }}
+                                className="px-1.5 py-1 rounded bg-amber-500/10 text-amber-500/60 hover:text-amber-400 text-[9px] font-black border border-amber-500/20 flex items-center gap-1 group/add underline-offset-2 hover:underline"
+                            >
+                                <Plus className="w-2.5 h-2.5" /> 공격
+                            </button>
+                        </div>
+                    ) : (
+                        <button
+                            onClick={() => { setShowCustom(true); setCustomTarget({ type, group }); setCustomType(''); }}
+                            className={cn(
+                                "p-1 rounded hover:bg-white/5 transition-colors group/add",
+                                type === 'winner' ? "text-cyan-500/50 hover:text-cyan-400" : "text-rose-500/50 hover:text-rose-400"
+                            )}
+                        >
+                            <Plus className="w-3.5 h-3.5 group-hover/add:rotate-90 transition-transform" />
+                        </button>
+                    )}
+                </div>
+            </div>
         );
     };
 
-    const renderCategoryButton = (cat: Category) => {
+    const handleDragStart = (id: string, e: React.DragEvent) => {
+        if (!isManageMode && !isManageModalOpen) return;
+        setDraggedId(id);
+        e.dataTransfer.effectAllowed = 'move';
+
+        // Slight delay to allow ghost image creation
+        setTimeout(() => {
+            const el = e.target as HTMLElement;
+            if (el) el.style.opacity = '0.4';
+        }, 0);
+    };
+
+    const handleDragEnd = (e: React.DragEvent) => {
+        setDraggedId(null);
+        const el = e.target as HTMLElement;
+        if (el) el.style.opacity = '1';
+    };
+
+    const handleDragOver = (e: React.DragEvent, id: string) => {
+        if ((!isManageMode && !isManageModalOpen) || draggedId === id) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+    };
+
+    const handleDrop = (id: string, e: React.DragEvent) => {
+        e.preventDefault();
+        if ((!isManageMode && !isManageModalOpen) || !draggedId || draggedId === id) return;
+
+        const newOrder = [...localOrder];
+        const draggedIdx = newOrder.indexOf(draggedId);
+        const targetIdx = newOrder.indexOf(id);
+
+        if (draggedIdx === -1 || targetIdx === -1) return;
+
+        newOrder.splice(draggedIdx, 1);
+        newOrder.splice(targetIdx, 0, draggedId);
+
+        setLocalOrder(newOrder);
+        setDraggedId(null);
+    };
+
+    const renderCategoryButton = (cat: Category, isInsideModal: boolean = false) => {
         const isWinner = cat.type === 'winner';
+        const isDragging = draggedId === cat.id;
 
         return (
-            <div key={cat.id} className="relative group shrink-0 w-full">
+            <div
+                key={cat.id}
+                className={cn(
+                    "relative group shrink-0",
+                    isDragging && "opacity-20 scale-95"
+                )}
+                draggable={isManageMode || isInsideModal || isManageModalOpen}
+                onDragStart={(e) => handleDragStart(cat.id, e)}
+                onDragOver={(e) => handleDragOver(e, cat.id)}
+                onDragEnd={handleDragEnd}
+                onDrop={(e) => handleDrop(cat.id, e)}
+            >
                 {editingId === cat.id ? (
                     <div className={cn(
-                        "flex flex-col gap-2 bg-slate-900 p-1.5 rounded-xl border-2 h-11 justify-center animate-in zoom-in-95",
-                        isWinner ? "border-cyan-500 shadow-[0_0_15px_rgba(0,242,255,0.3)]" : "border-rose-500 shadow-[0_0_15px_rgba(255,0,127,0.3)]"
+                        "flex flex-col gap-1 bg-slate-900 p-1 rounded-lg border h-8 justify-center animate-in zoom-in-95 min-w-[80px]",
+                        isWinner ? "border-cyan-500" : (cat.category_group === 'error' ? "border-rose-500" : "border-amber-500")
                     )}>
-                        <div className="flex items-center gap-1.5 bg-slate-800/50 px-1.5 py-1 rounded-lg border border-slate-700">
+                        <div className="flex items-center gap-1 bg-slate-800/50 px-1 py-0.5 rounded border border-slate-700">
                             <input
                                 type="text"
                                 value={editName}
                                 onChange={(e) => setEditName(e.target.value)}
-                                className="w-full px-1 py-0.5 text-[11px] font-bold border-none focus:ring-0 bg-transparent text-white"
+                                className="w-full px-1 py-0 text-[10px] font-bold border-none focus:ring-0 bg-transparent text-white"
                                 autoFocus
                             />
-                            <button
-                                onClick={() => handleUpdateCategory(cat.id)}
-                                className="p-1 bg-cyan-500 text-slate-950 rounded-md shrink-0 transition-all active:scale-95"
-                            >
-                                <Save className="w-4 h-4" />
+                            <button onClick={() => handleUpdateCategory(cat.id)} className="p-0.5 bg-cyan-500 text-slate-950 rounded transition-all active:scale-95">
+                                <Save className="w-3 h-3" />
                             </button>
                         </div>
                     </div>
                 ) : (
-                    <div className="relative group hover:scale-[1.03] transition-all duration-300">
+                    <div className="relative group hover:scale-[1.02] transition-all duration-200 h-8">
                         <button
-                            onClick={() => handleAddLog(isWinner, cat.name)}
-                            disabled={submitting || isManageMode}
+                            onClick={() => !isInsideModal && !isManageModalOpen && handleAddLog(isWinner, cat.name)}
+                            disabled={submitting || ((isManageMode || isManageModalOpen) && !isInsideModal)}
                             className={cn(
-                                "w-full h-11 px-4 py-1.5 rounded-xl border transition-all flex items-center justify-center group active:scale-95 gap-2 shadow-sm font-bold tracking-tight uppercase",
+                                "h-full px-3 py-1 rounded-lg border transition-all flex items-center justify-center group active:scale-95 shadow-sm font-black text-center w-auto min-w-[50px]",
                                 isWinner
-                                    ? "bg-slate-900 border-cyan-500/20 hover:border-cyan-400 hover:bg-cyan-500/10 text-cyan-400"
-                                    : "bg-slate-900 border-rose-500/20 hover:border-rose-400 hover:bg-rose-500/10 text-rose-400",
-                                isManageMode && "cursor-default border-slate-700/80 bg-slate-800/50"
+                                    ? "bg-slate-900/40 border-cyan-500/20 hover:border-cyan-400 hover:bg-cyan-500/10 text-cyan-400"
+                                    : cat.category_group === 'error'
+                                        ? "bg-slate-900/40 border-rose-500/20 hover:border-rose-400 hover:bg-rose-500/10 text-rose-400"
+                                        : "bg-slate-900/40 border-amber-500/20 hover:border-amber-400 hover:bg-amber-500/10 text-amber-500",
+                                (isManageMode || isManageModalOpen) && "cursor-move border-slate-700/80 bg-slate-800/50",
+                                isInsideModal && "cursor-move opacity-100"
                             )}
-
                         >
-                            <span className="text-[12px] leading-snug whitespace-nowrap overflow-hidden text-ellipsis w-full">{cat.name}</span>
+                            <span className="text-[11px] leading-tight whitespace-nowrap">{cat.name}</span>
                         </button>
-                        {isManageMode && (
-                            <div className="absolute -top-1.5 -right-1.5 flex gap-1 animate-in zoom-in duration-200 z-20">
+                        {(isManageMode || isInsideModal || isManageModalOpen) && (
+                            <div className="absolute -top-1 -right-1 flex gap-0.5 animate-in zoom-in duration-200 z-20">
                                 <button
-                                    onClick={() => { setEditingId(cat.id); setEditName(cat.name); }}
-                                    className="w-6 h-6 bg-slate-800 text-cyan-400 rounded-lg flex items-center justify-center border border-slate-700 shadow-xl hover:scale-110 transition-all hover:bg-cyan-500 hover:text-slate-950"
+                                    onClick={(e) => { e.stopPropagation(); setEditingId(cat.id); setEditName(cat.name); }}
+                                    className="w-5 h-5 bg-slate-800 text-cyan-400 rounded flex items-center justify-center border border-slate-700 shadow-xl hover:bg-cyan-500 hover:text-slate-950"
                                 >
-                                    <SquarePen className="w-3 h-3" />
+                                    <SquarePen className="w-2.5 h-2.5" />
                                 </button>
                                 <button
-                                    onClick={() => handleDeleteCategory(cat.id)}
-                                    className="w-6 h-6 bg-slate-800 text-rose-500 rounded-lg flex items-center justify-center border border-slate-700 shadow-xl hover:scale-110 transition-all hover:bg-rose-500 hover:text-white"
+                                    onClick={(e) => { e.stopPropagation(); handleDeleteCategory(cat.id); }}
+                                    className="w-5 h-5 bg-slate-800 text-rose-500 rounded flex items-center justify-center border border-slate-700 shadow-xl hover:bg-rose-500 hover:text-white"
                                 >
-                                    <Trash2 className="w-3 h-3" />
+                                    <Trash2 className="w-2.5 h-2.5" />
                                 </button>
                             </div>
                         )}
@@ -360,178 +431,148 @@ export default function DataEntryLogger({
         );
     };
 
-    // Helper to get technique color
-    const getTechColor = (name: string): { color: string; bg: string; border: string; light: string } => {
-        const n = name.toLowerCase();
-        if (n.includes('스매시')) return { color: 'text-cyan-400', bg: 'bg-cyan-500', border: 'border-cyan-500/20', light: 'shadow-[0_0_15px_rgba(34,211,238,0.3)]' };
-        if (n.includes('드롭')) return { color: 'text-emerald-400', bg: 'bg-emerald-500', border: 'border-emerald-500/20', light: 'shadow-[0_0_15px_rgba(16,185,129,0.3)]' };
-        if (n.includes('헤어핀')) return { color: 'text-amber-400', bg: 'bg-amber-500', border: 'border-amber-500/20', light: 'shadow-[0_0_15px_rgba(245,158,11,0.3)]' };
-        if (n.includes('푸시')) return { color: 'text-violet-400', bg: 'bg-violet-500', border: 'border-violet-500/20', light: 'shadow-[0_0_15px_rgba(139,92,246,0.3)]' };
-        if (n.includes('드라이브')) return { color: 'text-blue-400', bg: 'bg-blue-500', border: 'border-blue-500/20', light: 'shadow-[0_0_15px_rgba(59,130,246,0.3)]' };
-        if (n.includes('클리어')) return { color: 'text-rose-400', bg: 'bg-rose-500', border: 'border-rose-500/20', light: 'shadow-[0_0_15px_rgba(244,63,94,0.3)]' };
-        return { color: 'text-slate-400', bg: 'bg-slate-500', border: 'border-slate-500/20', light: 'shadow-[0_0_15px_rgba(148,163,184,0.3)]' };
-    };
-
     return (
-        <div className="h-full flex flex-col bg-slate-950 rounded-[32px] border border-white/10 p-5 shadow-2xl overflow-hidden relative group/logger">
-            {/* Grid Pattern Background */}
-            <div className="absolute inset-0 opacity-[0.03] pointer-events-none"
-                style={{ backgroundImage: 'radial-gradient(#00f2ff 1px, transparent 1px)', backgroundSize: '16px 16px' }} />
+        <div className="h-full flex flex-col bg-slate-950 rounded-[24px] border border-white/10 p-2 shadow-2xl overflow-hidden relative group/logger">
+            <div className="absolute inset-0 opacity-[0.02] pointer-events-none"
+                style={{ backgroundImage: 'radial-gradient(#00f2ff 1px, transparent 1px)', backgroundSize: '12px 12px' }} />
 
-            {/* Performance Metrics HUD Area */}
-            <div className="flex-1 flex flex-col min-h-0 relative z-10 bg-slate-900/30 rounded-2xl border border-white/5 p-6">
-                <div className="flex items-center justify-between mb-8">
-                    <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-xl bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20">
-                            <Target className="w-4 h-4 text-cyan-400" />
+            <div className="flex-1 flex flex-col min-h-0 relative z-10 bg-slate-900/30 rounded-xl border border-white/5 p-2.5">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-4 shrink-0 px-1">
+                    <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20">
+                            <Target className="w-3.5 h-3.5 text-cyan-400" />
                         </div>
-                        <div className="flex flex-col">
-                            <span className="text-[13px] font-black text-white uppercase tracking-tight">전술 밸런스 심층 분석</span>
-                            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest opacity-60">Tactical Balance Deep Analysis</span>
-                        </div>
+                        <span className="text-[13px] font-black text-white tracking-tight">수동 고속 분석</span>
                     </div>
-
                     <button
-                        onClick={() => { setIsManageMode(!isManageMode); setEditingId(null); }}
+                        onClick={() => { setIsManageModalOpen(true); setEditingId(null); }}
                         className={cn(
-                            "w-10 h-10 rounded-xl transition-all flex items-center justify-center active:scale-90 relative overflow-hidden",
-                            isManageMode
-                                ? "bg-cyan-500 text-slate-950 shadow-[0_0_20px_rgba(0,242,255,0.4)]"
-                                : "bg-slate-900 border border-white/10 text-slate-400 hover:border-cyan-500/50 hover:text-cyan-400 shadow-xl"
+                            "w-7 h-7 rounded flex items-center justify-center transition-all bg-slate-900 border border-white/10 text-slate-400 hover:border-cyan-500/50 hover:text-cyan-400",
+                            isManageModalOpen && "bg-cyan-500 text-slate-950 border-cyan-400 shadow-[0_0_10px_rgba(0,242,255,0.4)]"
                         )}
+                        title="카테고리 설정"
                     >
-                        <Settings2 className="w-5 h-5" />
+                        <Settings2 className="w-3.5 h-3.5" />
                     </button>
                 </div>
 
-                <div className="flex-1 flex items-center justify-center min-h-0 py-2">
-                    <div className="w-full h-full max-h-[220px] relative">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <RadarChart cx="50%" cy="50%" outerRadius="75%" data={radarMetrics}>
-                                <PolarGrid stroke="#334155" strokeDasharray="3 3" />
-                                <PolarAngleAxis
-                                    dataKey="subject"
-                                    tick={(props: any) => {
-                                        const { x, y, payload, textAnchor } = props;
-                                        const metric = radarMetrics.find(m => m.subject === payload.value);
-                                        return (
-                                            <g transform={`translate(${x},${y})`}>
-                                                <text
-                                                    textAnchor={textAnchor}
-                                                    fill="#f8fafc"
-                                                    fontSize={13}
-                                                    fontWeight="900"
-                                                    className="tracking-tighter"
-                                                >
-                                                    {payload.value}
-                                                    <tspan fill="#3b82f6" dx={4}>({metric?.A || 0})</tspan>
-                                                </text>
-                                            </g>
-                                        );
-                                    }}
-                                />
-                                <PolarRadiusAxis
-                                    angle={30}
-                                    domain={[0, 100]}
-                                    tick={false}
-                                    axisLine={false}
-                                />
-                                <Radar
-                                    name="Performance"
-                                    dataKey="A"
-                                    stroke="#3b82f6"
-                                    strokeWidth={3}
-                                    fill="#3b82f6"
-                                    fillOpacity={0.3}
-                                    animationDuration={1500}
-                                />
-                            </RadarChart>
-                        </ResponsiveContainer>
+                {/* Detailed Categories */}
+                <div className="flex-1 overflow-y-auto no-scrollbar space-y-4 pr-1">
+                    {/* Winner Section */}
+                    <div className="flex flex-col">
+                        {renderCategoryHeader('득점 사유', <Zap className="w-3 h-3 text-cyan-400" />, 'winner', 'others')}
+                        <div className="flex flex-wrap gap-1.5 p-1">
+                            {categories.filter(c => c.type === 'winner')
+                                .sort((a, b) => localOrder.indexOf(a.id) - localOrder.indexOf(b.id))
+                                .map(c => renderCategoryButton(c, false))}
+                        </div>
+                    </div>
 
-                        {/* Real-time Status Overlay */}
-                        <div className="absolute top-0 right-0 flex flex-col gap-2 p-2 pointer-events-none">
-                            <div className="px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 shadow-[0_0_10px_rgba(59,130,246,0.2)]">
-                                <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest animate-pulse">Live Tracking</span>
-                            </div>
+                    <div className="h-px bg-white/5 mx-1" />
+
+                    {/* Loss Section - Integrated */}
+                    <div className="flex flex-col">
+                        {renderCategoryHeader('실점 사유', <AlertCircle className="w-3 h-3 text-rose-500" />, 'loss', 'error')}
+                        <div className="flex flex-wrap gap-1.5 p-1">
+                            {categories.filter(c => c.type === 'loss')
+                                .sort((a, b) => {
+                                    const idxA = localOrder.indexOf(a.id);
+                                    const idxB = localOrder.indexOf(b.id);
+                                    if (idxA !== -1 && idxB !== -1 && idxA !== idxB) return idxA - idxB;
+
+                                    if (a.category_group !== 'error' && b.category_group === 'error') return -1;
+                                    if (a.category_group === 'error' && b.category_group !== 'error') return 1;
+                                    return 0;
+                                })
+                                .map(c => renderCategoryButton(c, false))}
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Category Management HUB (Modal for full management) */}
-            {isManageMode && (
-                <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center animate-in fade-in duration-500">
-                    <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-sm" onClick={() => setIsManageMode(false)} />
-
-                    <div className="relative w-full max-w-5xl h-[80vh] bg-slate-900 rounded-[50px] border border-white/10 shadow-2xl flex flex-col overflow-hidden z-[205] animate-in slide-in-from-bottom-10 duration-500">
-                        <div className="flex justify-between items-center px-12 py-8 border-b border-white/5 shrink-0 bg-slate-950/30">
-                            <div>
-                                <h2 className="text-3xl font-bold text-white tracking-widest uppercase flex items-center gap-4">
-                                    <Cpu className="w-8 h-8 text-cyan-400" />
-                                    Tactical Matrix
-                                </h2>
+            {/* Category Management Modal */}
+            {isManageModalOpen && (
+                <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[200] flex items-center justify-center p-4 animate-in fade-in duration-200">
+                    <div className="bg-slate-900 border border-white/10 rounded-[32px] w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+                        {/* Modal Header */}
+                        <div className="p-6 border-b border-white/5 flex items-center justify-between bg-slate-800/20">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center border border-cyan-500/30">
+                                    <Settings2 className="w-5 h-5 text-cyan-400" />
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-black text-white tracking-tight">카테고리 관리 설정</h2>
+                                    <p className="text-xs text-slate-400 font-medium">버튼을 드래그하여 순서를 바꾸거나 명칭을 수정할 수 있습니다.</p>
+                                </div>
                             </div>
-                            <button onClick={() => setIsManageMode(false)} className="p-4 rounded-3xl bg-white/5 text-white/40 hover:bg-rose-500 hover:text-white transition-all active:scale-95 border border-white/10">
-                                <X className="w-7 h-7" />
+                            <button
+                                onClick={() => { setIsManageModalOpen(false); setEditingId(null); }}
+                                className="w-10 h-10 rounded-full border border-white/5 flex items-center justify-center text-slate-400 hover:bg-white/10 hover:text-white transition-all"
+                            >
+                                <X className="w-5 h-5" />
                             </button>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-12 custom-scrollbar space-y-12">
+                        {/* Modal Content */}
+                        <div className="flex-1 overflow-y-auto p-8 space-y-10">
+                            {/* Winner Section */}
                             <section>
-                                <div className="flex items-center gap-4 mb-8">
-                                    <div className="h-[2px] w-12 bg-cyan-500" />
-                                    <span className="text-[12px] font-bold text-cyan-400 uppercase tracking-[0.3em]">Positive Engines</span>
-                                </div>
-                                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                                    {renderAddButton('winner', 'others')}
-                                    {categories.filter(c => c.type === 'winner').map(renderCategoryButton)}
+                                {renderCategoryHeader('득점 사유', <Zap className="w-4 h-4 text-cyan-400" />, 'winner', 'others')}
+                                <div className="flex flex-wrap gap-2 p-4 min-h-[80px] bg-slate-800/20 rounded-2xl border border-white/5 shadow-inner">
+                                    {categories.filter(c => c.type === 'winner')
+                                        .sort((a, b) => localOrder.indexOf(a.id) - localOrder.indexOf(b.id))
+                                        .map(c => renderCategoryButton(c, true))}
                                 </div>
                             </section>
 
+                            <div className="h-px bg-white/5" />
+
+                            {/* Loss Section */}
                             <section>
-                                <div className="flex items-center gap-4 mb-8">
-                                    <div className="h-[2px] w-12 bg-rose-500" />
-                                    <span className="text-[12px] font-bold text-rose-500 uppercase tracking-[0.3em]">Deficiency Logs</span>
+                                {renderCategoryHeader('실점 사유 (공격 & 범실)', <AlertCircle className="w-4 h-4 text-rose-400" />, 'loss', 'error')}
+                                <div className="flex flex-wrap gap-2 p-4 min-h-[80px] bg-slate-800/20 rounded-2xl border border-white/5 shadow-inner">
+                                    {categories.filter(c => c.type === 'loss')
+                                        .sort((a, b) => {
+                                            const idxA = localOrder.indexOf(a.id);
+                                            const idxB = localOrder.indexOf(b.id);
+                                            if (idxA !== -1 && idxB !== -1 && idxA !== idxB) return idxA - idxB;
+
+                                            if (a.category_group !== 'error' && b.category_group === 'error') return -1;
+                                            if (a.category_group === 'error' && b.category_group !== 'error') return 1;
+                                            return 0;
+                                        })
+                                        .map(c => renderCategoryButton(c, true))}
                                 </div>
-                                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                                    {renderAddButton('loss', 'others')}
-                                    {categories.filter(c => c.type === 'loss').map(renderCategoryButton)}
-                                </div>
+                                <p className="mt-3 text-[10px] text-slate-500 font-bold px-2 italic">
+                                    * 실점 사유는 기본적으로 상대 공격(오렌지)이 범실(레드)보다 먼저 나오도록 설정되어 있습니다.
+                                </p>
                             </section>
                         </div>
 
-                        <div className="p-8 shrink-0 flex justify-center bg-slate-950/30 border-t border-white/5">
-                            <button onClick={() => setIsManageMode(false)} className="px-12 py-3 bg-cyan-500 rounded-2xl font-black text-lg text-slate-950 tracking-tight active:scale-95 transition-all shadow-xl">
-                                확인
+                        {/* Modal Footer */}
+                        <div className="p-6 border-t border-white/5 bg-slate-800/20 flex justify-end">
+                            <button
+                                onClick={async () => {
+                                    await handleSaveOrder();
+                                    setIsManageModalOpen(false);
+                                }}
+                                className="px-8 py-3 bg-cyan-500 text-slate-950 font-black rounded-xl hover:bg-cyan-400 transition-all shadow-[0_0_20px_rgba(0,242,255,0.3)] active:scale-95 flex items-center gap-2"
+                                disabled={submitting}
+                            >
+                                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                세팅 완료 및 저장
                             </button>
                         </div>
-
                     </div>
                 </div>
             )}
 
             {submitting && (
-                <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-md flex items-center justify-center z-[110]">
-                    <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
+                <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-[110]">
+                    <Loader2 className="w-6 h-6 animate-spin text-cyan-400" />
                 </div>
             )}
-
-            <style jsx global>{`
-                .custom-scrollbar::-webkit-scrollbar {
-                    width: 4px;
-                }
-                .custom-scrollbar::-webkit-scrollbar-track {
-                    background: rgba(255, 255, 255, 0.02);
-                    border-radius: 10px;
-                }
-                .custom-scrollbar::-webkit-scrollbar-thumb {
-                    background: rgba(255, 255, 255, 0.1);
-                    border-radius: 10px;
-                }
-                .custom-scrollbar:hover::-webkit-scrollbar-thumb {
-                    background: rgba(34, 211, 238, 0.3);
-                }
-            `}</style>
         </div>
     );
 }
