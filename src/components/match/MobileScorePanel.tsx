@@ -284,22 +284,24 @@ export default function MobileScorePanel({
                             </div>
                             <div className="space-y-2">
                                 {winnerData.slice(0, 5).map((item, idx) => (
-                                    <div key={item.name} className="flex items-center gap-3 p-4 bg-white/5 rounded-2xl border border-white/5">
-                                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-sm font-black ${idx === 0 ? 'bg-blue-600 text-white' : 'bg-white/10 text-slate-400'}`}>
-                                            {idx + 1}
-                                        </div>
-                                        <div className="flex-1">
-                                            <p className="text-lg font-black text-blue-100">{item.name}</p>
-                                            <div className="flex items-center gap-2 mt-0.5">
-                                                <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
-                                                    <div className="h-full bg-blue-500 rounded-full" style={{ width: `${item.percent}%` }} />
-                                                </div>
-                                                <span className="text-xs font-black text-blue-400 tabular-nums">{item.percent}%</span>
+                                    <div key={item.name} className="flex flex-col gap-3 p-4 bg-white/5 rounded-2xl border border-white/5">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-sm font-black shrink-0 ${idx === 0 ? 'bg-blue-600 text-white' : 'bg-white/10 text-slate-400'}`}>
+                                                {idx + 1}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-lg font-black text-blue-100 break-keep leading-tight">{item.name}</p>
+                                            </div>
+                                            <div className="text-right shrink-0 px-2.5 py-1 bg-white/5 rounded-lg border border-white/5">
+                                                <span className="text-xl font-black text-white">{item.value}</span>
+                                                <span className="text-[9px] font-bold text-slate-500 uppercase ml-1">Hits</span>
                                             </div>
                                         </div>
-                                        <div className="text-right">
-                                            <p className="text-xl font-black text-white">{item.value}</p>
-                                            <p className="text-[9px] font-bold text-slate-500 uppercase">Hits</p>
+                                        <div className="flex items-center gap-3 pl-11">
+                                            <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
+                                                <div className="h-full bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.3)]" style={{ width: `${item.percent}%` }} />
+                                            </div>
+                                            <span className="text-xs font-black text-blue-400 tabular-nums w-10 text-right">{item.percent}%</span>
                                         </div>
                                     </div>
                                 ))}
@@ -316,22 +318,24 @@ export default function MobileScorePanel({
                             </div>
                             <div className="space-y-2">
                                 {lossData.slice(0, 5).map((item, idx) => (
-                                    <div key={item.name} className="flex items-center gap-3 p-4 bg-white/5 rounded-2xl border border-white/5">
-                                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-sm font-black ${idx === 0 ? 'bg-rose-600 text-white' : 'bg-white/10 text-slate-400'}`}>
-                                            {idx + 1}
-                                        </div>
-                                        <div className="flex-1">
-                                            <p className="text-lg font-black text-rose-100">{item.name}</p>
-                                            <div className="flex items-center gap-2 mt-0.5">
-                                                <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
-                                                    <div className="h-full bg-rose-500 rounded-full" style={{ width: `${item.percent}%` }} />
-                                                </div>
-                                                <span className="text-xs font-black text-rose-400 tabular-nums">{item.percent}%</span>
+                                    <div key={item.name} className="flex flex-col gap-3 p-4 bg-white/5 rounded-2xl border border-white/5">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-sm font-black shrink-0 ${idx === 0 ? 'bg-rose-600 text-white' : 'bg-white/10 text-slate-400'}`}>
+                                                {idx + 1}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-lg font-black text-rose-100 break-keep leading-tight">{item.name}</p>
+                                            </div>
+                                            <div className="text-right shrink-0 px-2.5 py-1 bg-white/5 rounded-lg border border-white/5">
+                                                <span className="text-xl font-black text-white">{item.value}</span>
+                                                <span className="text-[9px] font-bold text-slate-500 uppercase ml-1">Hits</span>
                                             </div>
                                         </div>
-                                        <div className="text-right">
-                                            <p className="text-xl font-black text-white">{item.value}</p>
-                                            <p className="text-[9px] font-bold text-slate-500 uppercase">Hits</p>
+                                        <div className="flex items-center gap-3 pl-11">
+                                            <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
+                                                <div className="h-full bg-rose-500 rounded-full shadow-[0_0_8px_rgba(244,63,94,0.3)]" style={{ width: `${item.percent}%` }} />
+                                            </div>
+                                            <span className="text-xs font-black text-rose-400 tabular-nums w-10 text-right">{item.percent}%</span>
                                         </div>
                                     </div>
                                 ))}
