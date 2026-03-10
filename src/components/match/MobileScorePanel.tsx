@@ -143,14 +143,7 @@ export default function MobileScorePanel({
                     <p className="text-sm font-black truncate">나 vs {match.opponent_1?.name}</p>
                 </div>
 
-                <button
-                    onClick={onShowStats}
-                    className="p-2.5 rounded-xl bg-blue-600/20 text-blue-400 active:bg-blue-600/40 transition border border-blue-500/20 mr-1"
-                >
-                    <BarChart3 className="w-4 h-4" />
-                </button>
-
-                <div className="flex gap-1 shrink-0">
+                <div className="flex gap-1 shrink-0 ml-2">
                     {[1, 2, 3].map(s => (
                         <button
                             key={s}
@@ -195,9 +188,16 @@ export default function MobileScorePanel({
                         {scoreOpp}
                     </p>
                 </div>
-                <div className="ml-3 text-right shrink-0">
-                    <p className="text-[10px] text-slate-500 font-bold">{currentSet}세트</p>
-                    <p className="text-xs text-slate-400">{currentSetLogs.length}랠리</p>
+
+                {/* Statistics Button Moved Here (Replaces set/rally info) */}
+                <div className="ml-3 shrink-0 flex flex-col items-center gap-1">
+                    <button
+                        onClick={onShowStats}
+                        className="w-12 h-12 rounded-2xl bg-blue-600 shadow-lg shadow-blue-500/20 flex items-center justify-center active:scale-95 transition-transform"
+                    >
+                        <BarChart3 className="w-6 h-6 text-white" />
+                    </button>
+                    <span className="text-[8px] font-black text-blue-400/80 uppercase tracking-tighter">분석 리포트</span>
                 </div>
             </div>
 
