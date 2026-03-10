@@ -100,6 +100,30 @@ export default function MobileScorePanel({
 
     const recentLogs = [...currentSetLogs].reverse();
 
+    const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, value, percent }: any) => {
+        const RADIAN = Math.PI / 180;
+        // 섹터 중앙 위치 계산
+        const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+        const x = cx + radius * Math.cos(-midAngle * RADIAN);
+        const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+        // 비중이 너무 적으면(5% 미만) 표시하지 않음 (겹침 방지)
+        if (percent < 0.1) return null;
+
+        return (
+            <text
+                x={x}
+                y={y}
+                fill="white"
+                textAnchor="middle"
+                dominantBaseline="central"
+                className="text-[11px] font-black pointer-events-none drop-shadow-md"
+            >
+                {value}
+            </text>
+        );
+    };
+
     return (
         <div className="flex flex-col h-dvh bg-slate-950 text-white overflow-hidden">
             {/* ── Header ── */}
@@ -191,6 +215,8 @@ export default function MobileScorePanel({
                                             outerRadius="100%"
                                             paddingAngle={4}
                                             dataKey="value"
+                                            labelLine={false}
+                                            label={renderCustomizedLabel}
                                         >
                                             {winnerData.map((entry, index) => (
                                                 <Cell key={`cell-${index}`} fill={COLORS_WIN[index % COLORS_WIN.length]} />
@@ -219,6 +245,8 @@ export default function MobileScorePanel({
                                             outerRadius="100%"
                                             paddingAngle={4}
                                             dataKey="value"
+                                            labelLine={false}
+                                            label={renderCustomizedLabel}
                                         >
                                             {lossData.map((entry, index) => (
                                                 <Cell key={`cell-${index}`} fill={COLORS_LOSS[index % COLORS_LOSS.length]} />
