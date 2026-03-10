@@ -431,12 +431,9 @@ function MatchDetailContent() {
                 <MobileScorePanel
                     match={match}
                     logs={logs}
-                    categories={categories}
                     matchId={matchId!}
                     currentSet={currentSet}
                     onSetChange={handleSetChange}
-                    onLogAdded={handleAddLog as any}
-                    onLogsAdded={handleBulkAddLogs}
                     player={player}
                     onPlayerReady={setPlayer}
                     onShowStats={() => setIsMobileStatsOpen(true)}
