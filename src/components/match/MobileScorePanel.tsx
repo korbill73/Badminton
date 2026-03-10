@@ -100,27 +100,40 @@ export default function MobileScorePanel({
 
     const recentLogs = [...currentSetLogs].reverse();
 
-    const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, value, percent }: any) => {
+    const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, value, percent, name, index }: any) => {
         const RADIAN = Math.PI / 180;
         // 섹터 중앙 위치 계산
         const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
         const x = cx + radius * Math.cos(-midAngle * RADIAN);
         const y = cy + radius * Math.sin(-midAngle * RADIAN);
 
-        // 비중이 너무 적으면(5% 미만) 표시하지 않음 (겹침 방지)
-        if (percent < 0.1) return null;
+        // 상위 3개만 텍스트 표시 (공간 확보 및 가독성)
+        // 비중이 너무 적거나(5% 미만) 순위가 낮으면 표시하지 않음
+        if (percent < 0.05 || index > 2) return null;
 
         return (
-            <text
-                x={x}
-                y={y}
-                fill="white"
-                textAnchor="middle"
-                dominantBaseline="central"
-                className="text-[11px] font-black pointer-events-none drop-shadow-md"
-            >
-                {value}
-            </text>
+            <g>
+                <text
+                    x={x}
+                    y={y - 6}
+                    fill="white"
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    className="text-[9px] font-black pointer-events-none drop-shadow-md opacity-80"
+                >
+                    {name}
+                </text>
+                <text
+                    x={x}
+                    y={y + 6}
+                    fill="white"
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    className="text-[11px] font-black pointer-events-none drop-shadow-md"
+                >
+                    {value}
+                </text>
+            </g>
         );
     };
 
