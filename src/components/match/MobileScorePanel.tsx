@@ -100,6 +100,8 @@ export default function MobileScorePanel({
 
     const recentLogs = [...currentSetLogs].reverse();
 
+
+
     const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, value, percent, name, index }: any) => {
         const RADIAN = Math.PI / 180;
         // 섹터 중앙 위치 계산

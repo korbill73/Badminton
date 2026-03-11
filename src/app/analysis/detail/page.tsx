@@ -47,8 +47,18 @@ function MatchDetailContent() {
     const [selectedAnalysisSet, setSelectedAnalysisSet] = useState<'total' | number | 'compare'>('compare');
     const [isMobileStatsOpen, setIsMobileStatsOpen] = useState(false);
 
-    // Helper to change set globally
+    // Helper to change set globally with video seek
     const handleSetChange = (set: number) => {
+        // Automatically seek video to the last point of the previous set if moving forward
+        if (set > currentSet && player) {
+            const prevSetLogs = logs.filter(l => (l.set_number || 1) === set - 1);
+            const lastLogOfPrevSet = prevSetLogs[prevSetLogs.length - 1];
+
+            if (lastLogOfPrevSet?.video_timestamp) {
+                player.seekTo(lastLogOfPrevSet.video_timestamp);
+                player.playVideo();
+            }
+        }
         setCurrentSet(set);
         setSelectedAnalysisSet(set);
     };
