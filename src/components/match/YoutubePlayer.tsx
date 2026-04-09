@@ -35,7 +35,7 @@ export default function YoutubePlayer({ videoId, onPlayerReady }: YoutubePlayerP
         },
     }), []);
 
-    const onReady: YouTubeProps['onReady'] = React.useCallback((event) => {
+    const onReady: YouTubeProps['onReady'] = React.useCallback((event: any) => {
         onPlayerReady(event.target);
     }, [onPlayerReady]);
 
