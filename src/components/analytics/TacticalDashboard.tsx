@@ -56,9 +56,17 @@ interface Category {
     category_group: 'offensive' | 'tactical' | 'error' | 'others';
 }
 
+import TrainingEvaluation from './TrainingEvaluation';
+import HierarchyInsights from './HierarchyInsights';
+
 export default function TacticalDashboard({ logs, categories, selectedSet, onSetChange, onClose }: TacticalDashboardProps) {
+    const [isMounted, setIsMounted] = useState(false);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [lastAnalysizedAt, setLastAnalysizedAt] = useState<number>(Date.now());
+
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
 
     const handleRunAnalysis = () => {
         setIsAnalyzing(true);
@@ -373,6 +381,14 @@ export default function TacticalDashboard({ logs, categories, selectedSet, onSet
 
     const totalMetrics = useMemo(() => calculateMetrics(logs), [logs, categories, lastAnalysizedAt]);
 
+    if (!isMounted) {
+        return (
+            <div className="h-[400px] w-full flex items-center justify-center bg-slate-50 dark:bg-slate-900/50 rounded-[32px]">
+                <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+            </div>
+        );
+    }
+
     if (logs.length < 3) {
         return (
             <div className="h-[400px] w-full bg-slate-50 dark:bg-slate-900/50 rounded-[32px] border-2 border-dashed border-slate-200 dark:border-slate-800 flex flex-col items-center justify-center p-8 text-center" id="tactical-empty-state">
@@ -386,15 +402,15 @@ export default function TacticalDashboard({ logs, categories, selectedSet, onSet
     }
 
     return (
-        <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-1000">
+        <div className="space-y-6 md:space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-1000">
             {/* Mobile Header (Only if onClose is provided) */}
             {onClose && (
-                <div className="md:hidden sticky top-0 z-[60] bg-slate-950/80 backdrop-blur-xl -mx-4 px-4 py-4 flex items-center justify-between border-b border-white/10 mb-4">
+                <div className="md:hidden sticky top-0 z-[60] bg-slate-950/80 backdrop-blur-xl -mx-4 px-4 py-3 flex items-center justify-between border-b border-white/10 mb-2">
                     <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
                             <BarChart3 className="w-4 h-4 text-white" />
                         </div>
-                        <h2 className="text-lg font-black text-white">경기 상세 분석</h2>
+                        <h2 className="text-base font-black text-white">경기 상세 분석</h2>
                     </div>
                     <button
                         onClick={onClose}
@@ -405,25 +421,37 @@ export default function TacticalDashboard({ logs, categories, selectedSet, onSet
                 </div>
             )}
 
+            {/* [NEW] Training Evaluation AI Summary */}
+            <TrainingEvaluation 
+                metrics={totalMetrics} 
+                lastAnalysizedAt={lastAnalysizedAt}
+            />
+
+            {/* [NEW] Hierarchy 3-Level Insights (핵심 약점 진단) */}
+            <HierarchyInsights 
+                logs={selectedSet === 'total' || selectedSet === 'compare' ? logs : logs.filter(l => Number(l.set_number) === Number(selectedSet))} 
+                selectedSetText={selectedSet === 'total' || selectedSet === 'compare' ? '전체' : `${selectedSet}세트`}
+            />
+
             {/* 1. 컨트롤 패널 (전문적인 분석 도구 느낌) - Sticky Navigation */}
-            <div className="sticky top-4 z-50 flex flex-wrap items-center justify-between gap-6 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl p-3 rounded-[32px] border border-slate-200/50 dark:border-slate-800/50 shadow-lg mb-8 relative">
-                <div className="flex items-center gap-2">
+            <div className="sticky top-4 z-50 flex flex-nowrap md:flex-wrap items-center justify-start md:justify-between gap-3 md:gap-6 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl p-2 md:p-3 rounded-[24px] md:rounded-[32px] border border-slate-200/50 dark:border-slate-800/50 shadow-lg mb-4 md:mb-8 relative overflow-x-auto hide-scrollbar">
+                <div className="flex items-center gap-2 shrink-0">
                     {([1, 2, 3, 'compare', 'total'] as const).map(tab => {
                         const isAvailable = tab === 'total' || tab === 'compare' || logs.some(l => l.set_number === tab);
                         if (!isAvailable) return null;
 
                         return (
-                            <button
+                             <button
                                 key={tab}
                                 onClick={() => onSetChange(tab)}
                                 className={cn(
-                                    "px-8 py-3 rounded-2xl text-[15px] font-black transition-all tracking-wider uppercase",
+                                    "px-4 py-2 md:px-8 md:py-3 rounded-xl md:rounded-2xl text-[13px] md:text-[15px] font-black transition-all tracking-wider uppercase whitespace-nowrap",
                                     selectedSet === tab
                                         ? "bg-slate-950 text-white shadow-xl scale-105"
                                         : "text-slate-500 hover:bg-white dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
                                 )}
                             >
-                                {tab === 'compare' ? '세트별 비교 분석' : tab === 'total' ? '종합 분석 리포트' : `${tab}세트`}
+                                {tab === 'compare' ? '세트별 비교' : tab === 'total' ? '종합 리포트' : `${tab}세트`}
                             </button>
                         );
                     })}
@@ -431,7 +459,7 @@ export default function TacticalDashboard({ logs, categories, selectedSet, onSet
 
                 <div className="flex items-center gap-4">
                     {selectedSet !== 'compare' && currentData && (
-                        <div className="flex items-center gap-6 px-4">
+                        <div className="flex items-center gap-4 md:gap-6 md:px-4 hidden sm:flex">
                             <div className="flex flex-col items-end">
                                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">공격 효율</span>
                                 <span className="text-lg font-black text-slate-900 dark:text-white">{Math.round((currentData!.winPoints / currentData!.totalPoints) * 100)}% <span className="text-[10px] text-slate-400 font-bold ml-0.5">승률</span></span>
@@ -506,7 +534,7 @@ export default function TacticalDashboard({ logs, categories, selectedSet, onSet
                                             </div>
                                         </div>
 
-                                        <div className="h-[120px] w-full">
+                                        <div className="h-[120px] min-h-[120px] w-full">
                                             <ResponsiveContainer width="100%" height="100%">
                                                 <LineChart data={trendData} margin={{ top: 25, right: 35, left: 35, bottom: 5 }}>
                                                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} strokeOpacity={0.5} />
@@ -742,7 +770,7 @@ export default function TacticalDashboard({ logs, categories, selectedSet, onSet
                                 <div className="flex items-center justify-between mb-6">
                                     <h3 className="text-sm font-black text-slate-950 dark:text-white group-hover:text-blue-600 transition-colors uppercase tracking-widest">{item.setNumber}세트 전술 밸런스</h3>
                                 </div>
-                                <div className="h-[240px] mb-8">
+                                <div className="h-[240px] min-h-[240px] mb-8">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <RadarChart data={item.metrics!.radar}>
                                             <PolarGrid stroke="#e2e8f0" strokeDasharray="4 4" />

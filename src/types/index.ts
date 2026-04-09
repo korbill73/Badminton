@@ -20,7 +20,6 @@ export interface BDPlayer {
   id: string;
   name: string;
   school_or_team?: string;
-  birth_year?: number;
   created_at: string;
 }
 
@@ -47,8 +46,8 @@ export interface BDMatch {
   opponent_set_score: number;
   match_result: BDMatchResultType;
   youtube_video_id?: string;
-  youtube_video_id_2?: string;
-  youtube_video_id_3?: string;
+  set_2_start_time?: number; // Optional: for seeking to set 2 start
+  set_3_start_time?: number; // Optional: for seeking to set 3 start
   feedback_notes?: string;
   created_at: string;
 
@@ -66,7 +65,20 @@ export interface BDPointLog {
   current_score: string;
   is_my_point: boolean;
   point_type: BDPointType | string;
+  reason?: string;
+  situation?: string;
+  rally_length?: string;
+  build_up_factor?: string;
   video_timestamp?: number;
+  created_at: string;
+}
+
+export interface BDSetNote {
+  id: string;
+  match_id: string;
+  set_number: number;
+  content: string;
+  updated_at: string;
   created_at: string;
 }
 
@@ -77,4 +89,8 @@ export interface MomentumData {
   score: string;
   isMyPoint: boolean;
   pointType?: string;
+  reason?: string;
+  situation?: string;
+  rally_length?: string;
+  build_up_factor?: string;
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef } from 'react';
+import React from 'react';
 import YouTube, { YouTubeProps } from 'react-youtube';
 
 interface YoutubePlayerProps {
@@ -8,8 +8,24 @@ interface YoutubePlayerProps {
     onPlayerReady: (player: any) => void;
 }
 
+/**
+ * YouTube URL 또는 ID에서 11자리 비디오 ID를 추출합니다.
+ * /watch?v=, /live/, youtu.be/ 등 다양한 형식을 지원합니다.
+ */
+function extractVideoId(input: string): string {
+    if (!input) return '';
+    // 이미 11자리 ID인 경우 처리
+    if (input.length === 11 && !input.includes('/') && !input.includes('?')) return input;
+
+    const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=|live\/)|youtu\.be\/)([^"&?\/\s]{11})/;
+    const match = input.match(regex);
+    return match ? match[1] : input;
+}
+
 export default function YoutubePlayer({ videoId, onPlayerReady }: YoutubePlayerProps) {
-    const opts: YouTubeProps['opts'] = {
+    const cleanVideoId = extractVideoId(videoId);
+
+    const opts = React.useMemo<YouTubeProps['opts']>(() => ({
         height: '100%',
         width: '100%',
         playerVars: {
@@ -17,21 +33,27 @@ export default function YoutubePlayer({ videoId, onPlayerReady }: YoutubePlayerP
             modestbranding: 1,
             rel: 0,
         },
-    };
+    }), []);
 
-    const onReady: YouTubeProps['onReady'] = (event) => {
+    const onReady: YouTubeProps['onReady'] = React.useCallback((event) => {
         onPlayerReady(event.target);
-    };
+    }, [onPlayerReady]);
 
     return (
         <div className="aspect-video w-full rounded-xl overflow-hidden bg-black shadow-lg">
-            <YouTube
-                videoId={videoId}
-                opts={opts}
-                onReady={onReady}
-                className="w-full h-full"
-                iframeClassName="w-full h-full"
-            />
+            {cleanVideoId ? (
+                <YouTube
+                    videoId={cleanVideoId}
+                    opts={opts}
+                    onReady={onReady}
+                    className="w-full h-full"
+                    iframeClassName="w-full h-full"
+                />
+            ) : (
+                <div className="w-full h-full flex items-center justify-center text-slate-500 font-bold">
+                    동영상 ID가 유효하지 않습니다.
+                </div>
+            )}
         </div>
     );
 }

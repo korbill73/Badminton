@@ -12,7 +12,9 @@ import {
     Loader2,
     PlayCircle,
     BarChart3,
-    Calendar
+    Calendar,
+    Edit2,
+    MapPin
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -34,9 +36,10 @@ export default function AnalysisArchivePage() {
                 .from('bd_matches')
                 .select(`
                     *,
-                    tournament:bd_tournaments(name),
-                    opponent_1:bd_players!opponent_1_id(name),
-                    opponent_2:bd_players!opponent_2_id(name)
+                    tournament:bd_tournaments(name, location),
+                    partner:bd_players!partner_id(name),
+                    opponent_1:bd_players!opponent_1_id(name, school_or_team),
+                    opponent_2:bd_players!opponent_2_id(name, school_or_team)
                 `)
                 .order('match_date', { ascending: false });
 
@@ -148,58 +151,99 @@ export default function AnalysisArchivePage() {
                     </Link>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+                <div className="flex flex-col gap-4">
                     {filteredMatches.map(match => (
                         <Link
                             key={match.id}
                             href={`/analysis/detail?id=${match.id}`}
-                            className="group bg-white dark:bg-slate-900 rounded-[40px] border border-slate-100 dark:border-slate-800 p-8 hover:border-blue-500 hover:shadow-2xl hover:shadow-blue-100 dark:hover:shadow-blue-900/10 transition-all duration-500 flex flex-col gap-6"
+                            className="group bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 p-5 md:p-6 hover:border-blue-500 hover:shadow-xl hover:shadow-blue-100 dark:hover:shadow-blue-900/10 transition-all duration-300 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 md:gap-6"
                         >
-                            <div className="flex justify-between items-start">
-                                <div className="space-y-1">
-                                    <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-[9px] font-black uppercase tracking-widest text-slate-500">
-                                        {match.category}
-                                    </span>
-                                    <h3 className="text-xl font-black text-slate-900 dark:text-white group-hover:text-blue-600 transition-colors line-clamp-1">
-                                        vs {match.opponent_1?.name} {match.opponent_2 && `(${match.opponent_2.name})`}
+                            <div className="flex items-center gap-4 md:gap-6 flex-1 min-w-0 w-full">
+                                <div className={cn(
+                                    "w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center font-black text-xl italic shadow-sm shrink-0 transition-transform group-hover:scale-110",
+                                    match.match_result === 'win' ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400" : "bg-rose-50 text-rose-600 dark:bg-rose-500/20 dark:text-rose-400"
+                                )}>
+                                    {match.match_result === 'win' ? 'W' : 'L'}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                                        <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 w-fit rounded text-[10px] font-black uppercase tracking-widest text-slate-500">
+                                            {match.category}
+                                        </span>
+                                        <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1.5 min-w-0 break-words flex-1 lg:flex-none">
+                                            <Trophy className="w-3 h-3 text-amber-500 shrink-0" />
+                                            <span className="break-words font-medium">{match.tournament?.name || '일반 매치'}</span>
+                                        </span>
+                                        {match.tournament?.location && (
+                                            <span className="text-[11px] font-medium text-slate-400 flex items-center gap-1 min-w-0 break-words hidden sm:flex border-l border-slate-200 dark:border-slate-700 pl-2">
+                                                <MapPin className="w-3 h-3 text-slate-300 shrink-0" />
+                                                <span className="break-words">{match.tournament.location}</span>
+                                            </span>
+                                        )}
+                                        <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1.5 border-l border-slate-200 dark:border-slate-700 pl-2 shrink-0">
+                                            <Calendar className="w-3 h-3 opacity-50" /> {match.match_date}
+                                        </span>
+                                    </div>
+                                    <h3 className="text-lg md:text-xl font-black text-slate-900 dark:text-white group-hover:text-blue-600 transition-colors truncate flex flex-wrap items-center gap-1 sm:gap-1.5 break-all sm:break-normal">
+                                        <span className="shrink-0">박준서 {match.partner && `& ${match.partner.name}`}</span>
+                                        <span className="text-slate-400 mx-0.5 opacity-50 font-medium shrink-0">vs</span>
+                                        <span className="flex items-center flex-wrap gap-1 min-w-0 flex-1">
+                                            <span className="shrink-0">{match.opponent_1?.name}</span>
+                                            {(match.opponent_1 as any)?.school_or_team && (
+                                                <span className="text-[10px] md:text-xs font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-[1px] rounded shrink-0">
+                                                    {(match.opponent_1 as any).school_or_team}
+                                                </span>
+                                            )}
+                                            {match.opponent_2 && <span className="text-slate-400 opacity-50 font-medium mx-0.5 shrink-0">&</span>}
+                                            {match.opponent_2 && <span className="shrink-0">{match.opponent_2.name}</span>}
+                                            {match.opponent_2 && (match.opponent_2 as any)?.school_or_team && (match.opponent_2 as any).school_or_team !== (match.opponent_1 as any)?.school_or_team && (
+                                                <span className="text-[10px] md:text-xs font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-[1px] rounded shrink-0">
+                                                    {(match.opponent_2 as any).school_or_team}
+                                                </span>
+                                            )}
+                                        </span>
                                     </h3>
-                                    <p className="text-[10px] font-black text-slate-400 flex items-center gap-1.5 uppercase tracking-tighter">
-                                        <Trophy className="w-3 h-3 text-amber-500" /> {match.tournament?.name || '기타 경기'}
+                                </div>
+                            </div>
+
+                            <div className="flex flex-row items-center gap-6 md:gap-8 justify-between md:justify-end border-t md:border-t-0 border-slate-100 dark:border-slate-800 pt-5 md:pt-0 w-full md:w-auto mt-2 md:mt-0 relative z-10">
+                                <div className="text-right flex flex-col md:items-end w-full md:w-auto">
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest md:mb-1 w-full text-left md:text-right">Set Score</p>
+                                    <p className="text-2xl md:text-3xl font-black tabular-nums text-slate-900 dark:text-white flex items-center leading-none justify-start md:justify-end">
+                                        {match.my_set_score} <span className="text-slate-400 dark:text-slate-500 px-1.5 font-black">:</span> {match.opponent_set_score}
                                     </p>
                                 </div>
-                                <div className={cn(
-                                    "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-sm",
-                                    match.match_result === 'win' ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
-                                )}>
-                                    {match.match_result === 'win' ? 'WIN' : 'LOSS'}
-                                </div>
-                            </div>
 
-                            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-[28px] p-6 flex items-center justify-between border border-slate-50 dark:border-slate-800">
-                                <div className="text-center">
-                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Set Score</p>
-                                    <p className="text-2xl font-black tabular-nums text-slate-900 dark:text-white">{match.my_set_score} : {match.opponent_set_score}</p>
-                                </div>
-                                {match.youtube_video_id ? (
-                                    <div className="flex flex-col items-center gap-1 text-emerald-500">
-                                        <PlayCircle className="w-8 h-8 group-hover:scale-110 transition-transform" />
-                                        <span className="text-[8px] font-black uppercase">Video Play</span>
-                                    </div>
-                                ) : (
-                                    <div className="flex flex-col items-center gap-1 text-slate-300 dark:text-slate-700">
-                                        <Video className="w-8 h-8 opacity-20" />
-                                        <span className="text-[8px] font-black uppercase">No Video</span>
-                                    </div>
-                                )}
-                            </div>
+                                <div className="w-[1px] h-10 bg-slate-100 dark:bg-slate-800 hidden md:block"></div>
 
-                            <div className="flex items-center justify-between pt-2">
-                                <div className="flex items-center gap-2 text-slate-400">
-                                    <Calendar className="w-3.5 h-3.5" />
-                                    <span className="text-[11px] font-bold">{match.match_date}</span>
-                                </div>
-                                <div className="flex items-center gap-1 text-blue-600 font-black text-[11px] uppercase tracking-widest group-hover:translate-x-1 transition-transform">
-                                    정밀 분석 <ChevronRight className="w-4 h-4" />
+                                <div className="flex items-center gap-3 shrink-0">
+                                    {match.youtube_video_id ? (
+                                        <div className="flex items-center gap-1.5 px-3 md:px-4 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest shadow-sm group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                                            <PlayCircle className="w-4 h-4 md:w-5 md:h-5" />
+                                            <span className="hidden sm:inline">Play</span>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-1.5 px-3 md:px-4 py-2 bg-slate-50 dark:bg-slate-800/50 text-slate-400 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest border border-slate-100 dark:border-slate-700/50">
+                                            <Video className="w-4 h-4 opacity-50" />
+                                            <span className="hidden sm:inline">None</span>
+                                        </div>
+                                    )}
+
+                                    <button
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            window.location.href = `/tournaments/detail?id=${match.tournament_id}&edit=${match.id}`;
+                                        }}
+                                        className="w-10 h-10 md:w-[44px] md:h-[44px] relative z-20 flex items-center justify-center rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/40 transition-all border border-slate-100 dark:border-slate-700/50 hover:border-blue-200"
+                                        title="경기 수정"
+                                    >
+                                        <Edit2 className="w-4 h-4 md:w-4.5 md:h-4.5" />
+                                    </button>
+
+                                    <div className="w-10 h-10 md:w-[44px] md:h-[44px] bg-slate-50 dark:bg-slate-800 rounded-xl flex items-center justify-center group-hover:bg-slate-900 group-hover:text-white dark:group-hover:bg-slate-700 transition-all border border-slate-100 dark:border-slate-700/50">
+                                        <ChevronRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
+                                    </div>
                                 </div>
                             </div>
                         </Link>

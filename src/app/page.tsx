@@ -25,15 +25,23 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+interface DashboardMatch extends BDMatch {
+  set_scores?: string[];
+}
+
+import YearlyStatsWidget from '@/components/analytics/YearlyStatsWidget';
+
 export default function HomePage() {
-  const [recentMatches, setRecentMatches] = useState<BDMatch[]>([]);
+  const [recentMatches, setRecentMatches] = useState<DashboardMatch[]>([]);
+  const [allMatches, setAllMatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalMatches: 0,
     winRate: 0,
     bestTechnique: { name: 'N/A', rate: 0 },
     recentForm: [] as ('W' | 'L')[],
-    totalPoints: 0
+    totalPoints: 0,
+    versusRecords: [] as { name: string; win: number; loss: number }[]
   });
 
   const fetchDashboardData = async () => {
@@ -45,13 +53,59 @@ export default function HomePage() {
         .select(`
           *,
           tournament:bd_tournaments(name),
-          opponent_1:bd_players!opponent_1_id(name)
+          partner:bd_players!partner_id(name),
+          opponent_1:bd_players!opponent_1_id(name),
+          opponent_2:bd_players!opponent_2_id(name)
         `)
-        .order('match_date', { ascending: false })
-        .limit(5);
+        .order('match_date', { ascending: false });
 
       if (error) throw error;
-      const recentMatchesData = matches || [];
+      const recentMatchesData = (matches || []) as DashboardMatch[];
+
+      // 1-1. 각 매치의 세트별 최종 점수 가져오기
+      const matchIds = recentMatchesData.map(m => m.id);
+      if (matchIds.length > 0) {
+        const { data: setLogs } = await supabase
+          .from('bd_point_logs')
+          .select('match_id, set_number, current_score, video_timestamp, created_at')
+          .in('match_id', matchIds)
+          .order('set_number', { ascending: true })
+          .order('video_timestamp', { ascending: true })
+          .order('created_at', { ascending: true });
+
+        if (setLogs) {
+          // PostgreSQL NULL ASC 정렬에서 NULL은 마지막에 옴.
+          // null set_number 로그가 마지막으로 처리되어 정확한 점수를 0:1로 덮어쓰는 버그 수정.
+          // 해결: null 로그를 먼저 처리(set 1 fallback), 이후 번호가 있는 로그가 덮어씀(항상 우선)
+          const matchSetScores: Record<string, string[]> = {};
+
+          // ── 1차 패스: null set_number 로그 (set 1 하위 호환) ──
+          setLogs
+            .filter(l => l.set_number === null)
+            .forEach(log => {
+              const setIdx = 0; // null → 항상 1세트
+              if (!matchSetScores[log.match_id]) matchSetScores[log.match_id] = [];
+              matchSetScores[log.match_id][setIdx] = log.current_score;
+            });
+
+          // ── 2차 패스: set_number가 있는 로그 (null을 덮어씀, 마지막 = 최종 점수) ──
+          setLogs
+            .filter(l => l.set_number !== null)
+            .forEach(log => {
+              const setIdx = (log.set_number as number) - 1;
+              if (!matchSetScores[log.match_id]) matchSetScores[log.match_id] = [];
+              matchSetScores[log.match_id][setIdx] = log.current_score;
+            });
+
+          recentMatchesData.forEach(m => {
+            m.set_scores = matchSetScores[m.id] || [];
+          });
+        }
+
+      }
+
+
+
       setRecentMatches(recentMatchesData);
 
       // 2. 전체 경기 수 및 승수 조회
@@ -104,8 +158,46 @@ export default function HomePage() {
         winRate: totalMatchCount ? Math.round(((winCount || 0) / totalMatchCount) * 100) : 0,
         bestTechnique: topTech,
         recentForm: form as ('W' | 'L')[],
-        totalPoints: totalPointCount || 0
+        totalPoints: totalPointCount || 0,
+        versusRecords: [] // Will be populated in next step or combined
       });
+
+      // 6. 상대 전적 계산 및 연도별 전적 데이터
+      const { data: fetchAllMatches } = await supabase
+        .from('bd_matches')
+        .select('match_date, match_result, category, opponent_1:bd_players!opponent_1_id(name), opponent_2:bd_players!opponent_2_id(name)');
+
+      if (fetchAllMatches) {
+        setAllMatches(fetchAllMatches);
+        const records: Record<string, { win: number; loss: number }> = {};
+        fetchAllMatches.forEach(m => {
+          const opponents = [
+            Array.isArray(m.opponent_1) ? m.opponent_1[0] : m.opponent_1,
+            Array.isArray(m.opponent_2) ? m.opponent_2[0] : m.opponent_2
+          ].filter(Boolean) as any[];
+
+          if (m.category === 'doubles' && opponents.length === 2) {
+            const sorted = [...opponents].sort((a, b) => a.name.localeCompare(b.name));
+            const name = sorted.map(o => o.name).join(' & ');
+            if (!records[name]) records[name] = { win: 0, loss: 0 };
+            if (m.match_result === 'win') records[name].win++;
+            else records[name].loss++;
+          } else {
+            opponents.forEach(opponent => {
+              const name = opponent?.name || '알 수 없음';
+              if (!records[name]) records[name] = { win: 0, loss: 0 };
+              if (m.match_result === 'win') records[name].win++;
+              else records[name].loss++;
+            });
+          }
+        });
+        const versusRecords = Object.entries(records)
+          .map(([name, stat]) => ({ name, ...stat }))
+          .sort((a, b) => (b.win + b.loss) - (a.win + a.loss))
+          .slice(0, 5);
+
+        setStats(prev => ({ ...prev, versusRecords }));
+      }
 
     } catch (err: any) {
       console.error('대시보드 데이터 로드 실패:', err.message);
@@ -164,6 +256,8 @@ export default function HomePage() {
           </div>
         </div>
       </div>
+
+      <YearlyStatsWidget matches={allMatches} />
 
       {/* ── 상세 지표 ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
@@ -245,30 +339,47 @@ export default function HomePage() {
                         {match.match_result === 'win' ? 'W' : 'L'}
                       </div>
                       <div className="min-w-0">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <span className="text-[9px] font-black px-1.5 py-0.5 bg-slate-900 text-white dark:bg-white dark:text-slate-900 rounded tracking-tighter uppercase shrink-0">
+                        <div className="flex items-center gap-2 mb-2 flex-wrap">
+                          <span className="text-[10px] font-black px-2 py-0.5 bg-slate-900 text-white dark:bg-white dark:text-slate-900 rounded tracking-tighter uppercase shrink-0">
                             {match.category}
                           </span>
-                          <span className="text-[10px] font-bold text-slate-400 truncate">
+                          <span className="text-xs font-bold text-slate-500 dark:text-slate-400 truncate">
                             {match.tournament?.name || '일반 매치'}
                           </span>
                         </div>
-                        <h3 className="text-lg md:text-xl font-black text-slate-900 dark:text-white leading-tight truncate">
-                          <span className="opacity-30 font-medium">vs</span> {match.opponent_1?.name}
+                        <h3 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white leading-tight truncate">
+                          박준서 {match.partner && `& ${match.partner.name}`} <span className="opacity-30 font-medium mx-1">vs</span> {match.opponent_1?.name} {match.opponent_2 && `& ${match.opponent_2.name}`}
                         </h3>
-                        <p className="text-[10px] text-slate-300 font-bold mt-1 uppercase">{match.match_date}</p>
+                        <p className="text-xs text-slate-400 font-bold mt-1.5 uppercase tracking-wider">{match.match_date}</p>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-4 md:gap-8 relative">
-                      <div className="text-right">
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">SET SCORE</p>
-                        <p className="text-xl md:text-3xl font-black text-slate-900 dark:text-white tabular-nums tracking-tighter">
-                          {match.my_set_score} : {match.opponent_set_score}
-                        </p>
+                      <div className="text-right flex flex-col items-end">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">SET SCORE</p>
+                        <div className="flex items-center gap-3 md:gap-6">
+                          <p className="text-2xl md:text-5xl font-black text-slate-900 dark:text-white tabular-nums tracking-tighter flex items-center leading-none">
+                            {match.my_set_score} <span className="text-slate-400 dark:text-slate-500 px-1.5 font-black">:</span> {match.opponent_set_score}
+                          </p>
+                          {/* ── Actual Set Scores ── */}
+                          <div className="flex gap-1.5 md:gap-2">
+                            {match.set_scores && match.set_scores.length > 0 ? (
+                              match.set_scores.map((score, i) => (
+                                <div key={i} className="flex flex-col items-center">
+                                  <span className="text-[9px] font-black text-slate-400 mb-1">S{i + 1}</span>
+                                  <span className="text-sm md:text-2xl font-black px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-blue-600 dark:text-blue-400 rounded-xl min-w-[3.5rem] text-center shadow-sm border border-slate-100 dark:border-slate-700">
+                                    {score.replace('-', ':')}
+                                  </span>
+                                </div>
+                              ))
+                            ) : (
+                              <span className="text-[10px] font-bold text-slate-300">점수 정보 없음</span>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                      <div className="w-10 h-10 md:w-12 md:h-12 bg-slate-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
-                        <ArrowUpRight className="w-5 h-5 md:w-6 md:h-6" />
+                      <div className="w-12 h-12 md:w-14 md:h-14 bg-slate-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
+                        <ArrowUpRight className="w-6 h-6 md:w-7 md:h-7" />
                       </div>
                     </div>
                   </div>
@@ -295,6 +406,47 @@ export default function HomePage() {
               <button className="mt-8 px-6 py-3 bg-white text-slate-900 rounded-xl text-sm font-black flex items-center gap-2 hover:bg-slate-100 transition-all active:scale-95">
                 AI 리포트 보기 <ArrowUpRight className="w-4 h-4" />
               </button>
+            </div>
+          </div>
+
+          {/* Versus Records - New Section */}
+          <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 p-8 shadow-sm">
+            <h3 className="font-black flex items-center gap-2 mb-6 text-xs text-slate-400 uppercase tracking-[0.2em]">
+              <Trophy className="w-4 h-4 text-amber-500" />
+              선수별 상대 전적
+            </h3>
+            <div className="space-y-4">
+              {stats.versusRecords && stats.versusRecords.length > 0 ? (
+                stats.versusRecords.map((record, i) => (
+                  <div key={i} className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50">
+                    <div className="flex flex-col">
+                      <span className="text-sm font-black text-slate-900 dark:text-white">{record.name}</span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Total {record.win + record.loss} Matches</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <span className="text-lg font-black text-emerald-500">{record.win}</span>
+                        <span className="text-[10px] font-bold text-slate-300 mx-1">/</span>
+                        <span className="text-lg font-black text-rose-500">{record.loss}</span>
+                      </div>
+                      <div className="w-10 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden flex">
+                        <div
+                          className="bg-emerald-500 h-full"
+                          style={{ width: `${(record.win / (record.win + record.loss)) * 100}%` }}
+                        />
+                        <div
+                          className="bg-rose-500 h-full"
+                          style={{ width: `${(record.loss / (record.win + record.loss)) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="py-10 text-center text-slate-400 text-xs font-bold">
+                  데이터가 부족합니다.
+                </div>
+              )}
             </div>
           </div>
 

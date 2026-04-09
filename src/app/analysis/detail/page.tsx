@@ -11,7 +11,8 @@ import TacticalDashboard from '@/components/analytics/TacticalDashboard';
 import CategorySelectModal from '@/components/match/CategorySelectModal';
 import MobileScorePanel from '@/components/match/MobileScorePanel';
 import { BDMatch, BDPointLog, MomentumData } from '@/types';
-import { ChevronLeft, ChevronDown, Share2, Download, Loader2, Trophy, Layout, RefreshCw } from 'lucide-react';
+import SetNotesEditor from '@/components/match/SetNotesEditor';
+import { ChevronLeft, ChevronDown, Share2, Download, Loader2, Trophy, Layout, RefreshCw, Edit2 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useSearchParams } from 'next/navigation';
@@ -47,16 +48,78 @@ function MatchDetailContent() {
     const [selectedAnalysisSet, setSelectedAnalysisSet] = useState<'total' | number | 'compare'>('compare');
     const [isMobileStatsOpen, setIsMobileStatsOpen] = useState(false);
 
+    // Helper to parse "mm:ss" or seconds to total seconds
+    const parseTimeToSeconds = (timeStr: string | null | undefined): number | null => {
+        if (!timeStr) return null;
+        if (typeof timeStr === 'number') return timeStr;
+        if (timeStr.includes(':')) {
+            const [m, s] = timeStr.split(':').map(Number);
+            return (m * 60) + (s || 0);
+        }
+        return Number(timeStr);
+    };
+
+    const [isDesktop, setIsDesktop] = useState<boolean | null>(null);
+
+    useEffect(() => {
+        const checkDesktop = () => setIsDesktop(window.innerWidth >= 768);
+        checkDesktop();
+        window.addEventListener('resize', checkDesktop);
+        return () => window.removeEventListener('resize', checkDesktop);
+    }, []);
+
+    // ── Pre-process Video ID for Stability ──
+    const rawVideoId = match?.youtube_video_id || '';
+    const cleanVideoId = React.useMemo(() => {
+        if (!rawVideoId) return '';
+        if (rawVideoId.length === 11 && !rawVideoId.includes('/') && !rawVideoId.includes('?')) return rawVideoId;
+        const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=|live\/)|youtu\.be\/)([^"&?\/\s]{11})/;
+        const matchResult = rawVideoId.match(regex);
+        return matchResult ? matchResult[1] : rawVideoId;
+    }, [rawVideoId]);
+
     // Helper to change set globally with video seek
     const handleSetChange = (set: number) => {
-        // Automatically seek video to the last point of the previous set if moving forward
+        const seekWithDelay = (time: number) => {
+            setTimeout(() => {
+                if (player && typeof player.seekTo === 'function') {
+                    player.seekTo(time);
+                    // pauseVideo() 호출이 블랙 아웃을 유발할 수 있으므로 제거하거나 재생 상태를 유지합니다.
+                    if (typeof player.playVideo === 'function') {
+                        player.playVideo();
+                    }
+                }
+            }, 300);
+        };
+
+        // 1. If we have logs, check the last log of previous set (existing behavior)
         if (set > currentSet && player) {
             const prevSetLogs = logs.filter(l => (l.set_number || 1) === set - 1);
             const lastLogOfPrevSet = prevSetLogs[prevSetLogs.length - 1];
 
             if (lastLogOfPrevSet?.video_timestamp) {
-                player.seekTo(lastLogOfPrevSet.video_timestamp);
-                player.playVideo();
+                seekWithDelay(lastLogOfPrevSet.video_timestamp);
+            }
+            // 2. If no logs for target set yet, check for defined start time in feedback_notes
+            else if (match?.feedback_notes && match.feedback_notes.startsWith('{')) {
+                try {
+                    const meta = JSON.parse(match.feedback_notes);
+                    const startTime = parseTimeToSeconds(set === 2 ? meta.set2StartTime : set === 3 ? meta.set3StartTime : null);
+                    if (startTime !== null) {
+                        seekWithDelay(startTime);
+                    }
+                } catch (e) {}
+            }
+        } else if (set < currentSet && player) {
+            // Also support seeking back to start of set if defined
+            if (match?.feedback_notes && match.feedback_notes.startsWith('{')) {
+                try {
+                    const meta = JSON.parse(match.feedback_notes);
+                    const startTime = parseTimeToSeconds(set === 1 ? '0' : set === 2 ? meta.set2StartTime : set === 3 ? meta.set3StartTime : null);
+                    if (startTime !== null) {
+                        seekWithDelay(startTime);
+                    }
+                } catch (e) {}
             }
         }
         setCurrentSet(set);
@@ -67,6 +130,7 @@ function MatchDetailContent() {
     const [activeTime, setActiveTime] = useState<number>(0);
     const [pendingInsert, setPendingInsert] = useState<{ setNumber: number; timestamp: number; isMyPoint: boolean; pivotCreatedAt?: string } | null>(null);
     const [lastAddedId, setLastAddedId] = useState<string | null>(null);
+    const [pendingEdit, setPendingEdit] = useState<BDPointLog | null>(null);
 
     // Reset lastAddedId after 3 seconds for highlighting
     useEffect(() => {
@@ -267,14 +331,14 @@ function MatchDetailContent() {
     };
 
     const handleInsertLog = (targetSet: number, insertTime: number, isMyPoint: boolean = true, pivotCreatedAt?: string) => {
-        // 중간 삽입 모달 오픈 시 영상 일시정지
-        if (player) {
-            player.pauseVideo();
-        }
+        // 중간 삽입 모달 오픈 시 영상 일시정지 (사용자 요청으로 무정지 진행)
+        // if (player) {
+        //     player.pauseVideo();
+        // }
         setPendingInsert({ setNumber: targetSet, timestamp: Math.floor(insertTime), isMyPoint, pivotCreatedAt });
     };
 
-    const handleFinalizeInsert = async (categoryName: string) => {
+    const handleFinalizeInsert = async (data: { reason: string, situation: string, pointType: string, rallyLength: string, buildUpFactor?: string }) => {
         if (!pendingInsert || !matchId) return;
         const { setNumber, timestamp, isMyPoint, pivotCreatedAt } = pendingInsert;
 
@@ -287,7 +351,7 @@ function MatchDetailContent() {
                 finalCreatedAt = pivotDate.toISOString();
             }
 
-            const { data, error: insErr } = await supabase
+            const { data: insertedData, error: insErr } = await supabase
                 .from('bd_point_logs')
                 .insert([{
                     match_id: matchId,
@@ -299,7 +363,11 @@ function MatchDetailContent() {
                         return isMyPoint ? `${currentMe + 1}-${currentOpp}` : `${currentMe}-${currentOpp + 1}`;
                     })(),
                     is_my_point: isMyPoint,
-                    point_type: categoryName,
+                    point_type: data.pointType,
+                    reason: data.reason,
+                    situation: data.situation,
+                    rally_length: data.rallyLength,
+                    build_up_factor: data.buildUpFactor,
                     video_timestamp: timestamp,
                     created_at: finalCreatedAt
                 }])
@@ -307,13 +375,9 @@ function MatchDetailContent() {
                 .single();
 
             if (insErr) throw insErr;
-            if (data) {
-                const finalLogs = await syncAndRecalculateAll([...logs, data]);
-                if (finalLogs) setLastAddedId(data.id);
-                // 점수 기록 후 영상 자동 재생
-                if (player) {
-                    player.playVideo();
-                }
+            if (insertedData) {
+                const finalLogs = await syncAndRecalculateAll([...logs, insertedData]);
+                if (finalLogs) setLastAddedId(insertedData.id);
             }
             setPendingInsert(null);
         } catch (err: any) {
@@ -343,17 +407,17 @@ function MatchDetailContent() {
             alert('일괄 삭제 중 오류 발생: ' + err.message);
         }
     };
-    const handleUpdateLogType = async (logId: string, newType: string, isMyPoint: boolean) => {
+    const handleUpdateLogType = async (logId: string, data: { reason: string, situation: string, pointType: string, rallyLength: string, buildUpFactor?: string }, isMyPoint: boolean) => {
         try {
-            const { data, error } = await supabase
+            const { data: updatedData, error } = await supabase
                 .from('bd_point_logs')
-                .update({ point_type: newType, is_my_point: isMyPoint })
+                .update({ point_type: data.pointType, reason: data.reason, situation: data.situation, rally_length: data.rallyLength, build_up_factor: data.buildUpFactor, is_my_point: isMyPoint })
                 .eq('id', logId)
                 .select()
                 .single();
             if (error) throw error;
-            if (data) {
-                const updatedLogs = logs.map(l => l.id === logId ? data : l);
+            if (updatedData) {
+                const updatedLogs = logs.map(l => l.id === logId ? updatedData : l);
                 await syncAndRecalculateAll(updatedLogs);
             }
         } catch (err: any) {
@@ -431,50 +495,62 @@ function MatchDetailContent() {
         );
     }
 
-
     if (!match) return null;
+
+    // Loading layout choice
+    if (isDesktop === null) return null;
 
     return (
         <>
-            {/* ── MOBILE LAYOUT (hidden on md+) ── */}
-            <div className="md:hidden">
-                <MobileScorePanel
-                    match={match}
-                    logs={logs}
-                    matchId={matchId!}
-                    currentSet={currentSet}
-                    onSetChange={handleSetChange}
-                    player={player}
-                    onPlayerReady={setPlayer}
-                    onShowStats={() => setIsMobileStatsOpen(true)}
-                    onDeleteLog={handleDeleteLog}
-                />
+            {/* ── MOBILE LAYOUT ── */}
+            {!isDesktop && (
+                <div className="md:hidden">
+                    <MobileScorePanel
+                        match={match}
+                        logs={logs}
+                        categories={categories}
+                        matchId={matchId!}
+                        currentSet={currentSet}
+                        onSetChange={handleSetChange}
+                        player={player}
+                        onPlayerReady={setPlayer}
+                        onShowStats={() => setIsMobileStatsOpen(true)}
+                        onDeleteLog={handleDeleteLog}
+                        onQuickRecord={(isMyPoint) => {
+                            handleInsertLog(currentSet, activeTime, isMyPoint);
+                        }}
+                        onEditLog={(log) => {
+                            setPendingEdit(log);
+                        }}
+                    />
 
-                {/* Mobile Statistics Overlay */}
-                {isMobileStatsOpen && (
-                    <div className="fixed inset-0 z-[100] bg-slate-50 dark:bg-slate-950 overflow-y-auto pb-safe">
-                        <div className="max-w-md mx-auto min-h-full bg-white dark:bg-slate-900 shadow-2xl p-4">
-                            <TacticalDashboard
-                                logs={logs}
-                                categories={categories}
-                                selectedSet={selectedAnalysisSet}
-                                onSetChange={setSelectedAnalysisSet}
-                                onClose={() => setIsMobileStatsOpen(false)}
-                            />
+                    {/* Mobile Statistics Overlay */}
+                    {isMobileStatsOpen && (
+                        <div className="fixed inset-0 z-[100] bg-slate-50 dark:bg-slate-950 overflow-y-auto pb-safe">
+                            <div className="max-w-md mx-auto min-h-full bg-white dark:bg-slate-900 shadow-2xl p-4">
+                                <TacticalDashboard
+                                    logs={logs}
+                                    categories={categories}
+                                    selectedSet={selectedAnalysisSet}
+                                    onSetChange={setSelectedAnalysisSet}
+                                    onClose={() => setIsMobileStatsOpen(false)}
+                                />
+                            </div>
                         </div>
-                    </div>
-                )}
-            </div>
+                    )}
+                </div>
+            )}
 
-            {/* ── DESKTOP LAYOUT (hidden on mobile) ── */}
-            <div className="hidden md:block">
-                <div className="space-y-8 max-w-[1920px] mx-auto px-4 bg-slate-50/30 pb-20">
-                    {/* 1. Recording Section (Flexible Height) */}
-                    <div className="min-h-[calc(100vh-2.5rem)] flex flex-col gap-4 py-4 shrink-0">
-                        {/* Minimal Header - Restructured to include Match Info */}
-                        <div className="flex items-center justify-between shrink-0 h-10 px-2">
-                            <div className="flex items-center gap-4 flex-1">
-                                <Link
+            {/* ── DESKTOP LAYOUT ── */}
+            {isDesktop && (
+                <div className="hidden md:block">
+                    <div className="space-y-8 max-w-[1920px] mx-auto px-4 bg-slate-50/30 pb-20">
+                        {/* 1. Recording Section (Flexible Height) */}
+                        <div className="min-h-[calc(100vh-2.5rem)] flex flex-col gap-4 py-4 shrink-0">
+                            {/* Minimal Header - Restructured to include Match Info */}
+                            <div className="flex items-center justify-between shrink-0 h-10 px-2">
+                                <div className="flex items-center gap-4 flex-1">
+                                    <Link
                                     href={`/tournaments/detail?id=${match.tournament_id}`}
                                     className="p-1.5 bg-white rounded-lg border border-slate-200 text-slate-500 hover:text-blue-600 transition-colors"
                                 >
@@ -489,17 +565,24 @@ function MatchDetailContent() {
                                     {/* Match Info Moved Here */}
                                     <div className="flex items-center gap-4">
                                         <p className="text-xl font-black text-slate-900 whitespace-nowrap">
-                                            나 vs {match.opponent_1?.name}
+                                            박준서 {match.partner && `& ${match.partner.name}`} vs {match.opponent_1?.name} {match.opponent_2 && `& ${match.opponent_2.name}`}
                                         </p>
-                                        <div className="px-3 py-1 bg-slate-900 text-white rounded-lg text-sm font-black tracking-tighter shadow-lg">
-                                            {match.my_set_score} : {match.opponent_set_score}
+                                        <div className="px-3 py-1 bg-slate-900 text-white rounded-lg text-sm font-black tracking-tighter flex items-center shadow-lg">
+                                            {match.my_set_score} <span className="text-slate-400 px-1 font-black">:</span> {match.opponent_set_score}
                                         </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="flex gap-2 invisible lg:visible">
-                                {/* Hidden button space to maintain layout if needed, or just remove */}
+                            <div className="flex gap-2">
+                                <Link
+                                    href={`/tournaments/detail?id=${match.tournament_id}&edit=${match.id}`}
+                                    className="p-1.5 bg-white rounded-lg border border-slate-200 text-slate-500 hover:text-blue-600 transition-colors flex items-center gap-2 px-3 group"
+                                    title="경기 정보 수정"
+                                >
+                                    <Edit2 className="w-4 h-4" />
+                                    <span className="text-[10px] font-black uppercase opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">Edit Info</span>
+                                </Link>
                             </div>
                         </div>
 
@@ -507,21 +590,14 @@ function MatchDetailContent() {
                         <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 pb-12">
                             {/* TOP ROW: Video & Scoreboard (Fixed ratio + maximized height) */}
                             <div className="xl:col-span-8 flex flex-col bg-black rounded-3xl overflow-hidden shadow-2xl shrink-0 h-[58vh] min-h-[450px] max-h-[650px]">
-                                {(() => {
-                                    let currentVideoId = match.youtube_video_id;
-                                    if (currentSet === 2 && match.youtube_video_id_2) currentVideoId = match.youtube_video_id_2;
-                                    if (currentSet === 3 && match.youtube_video_id_3) currentVideoId = match.youtube_video_id_3;
-
-                                    if (currentVideoId) {
-                                        return <YoutubePlayer key={currentVideoId} videoId={currentVideoId} onPlayerReady={setPlayer} />;
-                                    }
-                                    return (
-                                        <div className="h-full flex flex-col items-center justify-center gap-4 text-slate-500">
-                                            <Trophy className="w-12 h-12 opacity-20" />
-                                            <p className="font-black text-sm uppercase tracking-widest">No Video Registered</p>
-                                        </div>
-                                    );
-                                })()}
+                                {cleanVideoId ? (
+                                    <YoutubePlayer videoId={cleanVideoId} onPlayerReady={setPlayer} />
+                                ) : (
+                                    <div className="h-full flex flex-col items-center justify-center gap-4 text-slate-500">
+                                        <Trophy className="w-12 h-12 opacity-20" />
+                                        <p className="font-black text-sm uppercase tracking-widest">No Video Registered</p>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="xl:col-span-4 flex flex-col min-h-0 shrink-0 h-[58vh] min-h-[450px] max-h-[650px]">
@@ -578,7 +654,7 @@ function MatchDetailContent() {
                                             onRallyClick={handleRallyClick}
                                             onDelete={handleDeleteLog}
                                             onDeleteBulk={handleDeleteBulk}
-                                            onUpdateType={handleUpdateLogType}
+                                            onEditClick={(log) => setPendingEdit(log)}
                                             onSync={handleSyncLog}
                                             onInsert={handleInsertLog}
                                             onResetSet={handleResetSet}
@@ -594,13 +670,9 @@ function MatchDetailContent() {
                                 <DataEntryLogger
                                     player={player}
                                     matchId={match.id}
-                                    match={match}
-                                    categories={categories}
-                                    onCategoryChange={fetchCategories}
                                     onLogAdded={handleAddLog}
                                     currentSet={currentSet}
                                     onSetChange={handleSetChange}
-                                    onLogsAdded={handleBulkAddLogs}
                                     logs={currentSetLogs}
                                 />
                             </div>
@@ -626,6 +698,29 @@ function MatchDetailContent() {
 
                     {/* 2. Analytics Dashboard Section */}
                     <div id="analytics-section" className="pt-12 border-t-2 border-slate-200 dark:border-slate-800 space-y-12">
+                        {/* Per-Set Notes Section — appears ABOVE AI report */}
+                        <div className="bg-white rounded-[32px] border border-slate-200 shadow-sm p-8">
+                            <div className="flex items-center gap-3 mb-6">
+                                <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20">
+                                    <span className="text-indigo-500 text-lg">📝</span>
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-black text-slate-900">세트별 메모</h3>
+                                    <p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Coach &amp; Player Notes — Per Set</p>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                {[1, 2, 3].map(s => (
+                                    <SetNotesEditor
+                                        key={`${match.id}-set-${s}`}
+                                        matchId={match.id}
+                                        setNumber={s}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* AI 성과 분석 리포트 (탭: 1세트/2세트/3세트/세트별비교/종합) */}
                         <TacticalDashboard
                             logs={logs}
                             categories={categories}
@@ -634,15 +729,33 @@ function MatchDetailContent() {
                         />
                     </div>
 
-                    <CategorySelectModal
-                        isOpen={!!pendingInsert}
-                        isMyPoint={pendingInsert?.isMyPoint ?? true}
-                        categories={categories}
-                        onSelect={handleFinalizeInsert}
-                        onClose={() => setPendingInsert(null)}
-                    />
+
+
+
                 </div>{/* end space-y-8 */}
-            </div > {/* end hidden md:block */}
+            </div>
+            )}
+
+            <CategorySelectModal
+                isOpen={!!pendingInsert}
+                isMyPoint={pendingInsert?.isMyPoint ?? true}
+                categories={categories}
+                onSelect={handleFinalizeInsert}
+                onClose={() => setPendingInsert(null)}
+            />
+
+            <CategorySelectModal
+                isOpen={!!pendingEdit}
+                isMyPoint={pendingEdit?.is_my_point ?? true}
+                categories={categories}
+                onSelect={async (data) => {
+                    if (pendingEdit) {
+                        await handleUpdateLogType(pendingEdit.id, data, pendingEdit.is_my_point);
+                        setPendingEdit(null);
+                    }
+                }}
+                onClose={() => setPendingEdit(null)}
+            />
         </>
     );
 }

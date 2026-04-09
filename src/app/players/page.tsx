@@ -24,7 +24,6 @@ export default function PlayersPage() {
     // Form states
     const [name, setName] = useState('');
     const [team, setTeam] = useState('');
-    const [birthYear, setBirthYear] = useState('');
     const [submitting, setSubmitting] = useState(false);
 
     // Fetch players from Supabase
@@ -59,8 +58,7 @@ export default function PlayersPage() {
                 .insert([
                     {
                         name,
-                        school_or_team: team,
-                        birth_year: birthYear ? parseInt(birthYear) : null
+                        school_or_team: team
                     }
                 ]);
 
@@ -74,7 +72,6 @@ export default function PlayersPage() {
                 setShowAddModal(false);
                 setName('');
                 setTeam('');
-                setBirthYear('');
             }, 1500);
         } catch (error: any) {
             alert('데이터 저장 중 오류가 발생했습니다: ' + error.message);
@@ -121,7 +118,7 @@ export default function PlayersPage() {
                 <table className="w-full text-left">
                     <thead>
                         <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
-                            <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">이름 / 소속 / 생년</th>
+                            <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">이름 / 소속</th>
                             <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">등록일</th>
                             <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">관리</th>
                         </tr>
@@ -153,7 +150,6 @@ export default function PlayersPage() {
                                             <div>
                                                 <p className="text-sm font-bold text-slate-900 dark:text-white">
                                                     {p.name}
-                                                    {p.birth_year && <span className="ml-2 text-[10px] text-slate-400 font-normal">({p.birth_year}년생)</span>}
                                                 </p>
                                                 <p className="text-xs text-slate-500">{p.school_or_team || '소속 미정'}</p>
                                             </div>
@@ -215,19 +211,6 @@ export default function PlayersPage() {
                                             placeholder="소속 팀명을 입력하세요"
                                             className="w-full px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium"
                                         />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">생년 (YYYY)</label>
-                                        <div className="relative">
-                                            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                                            <input
-                                                type="number"
-                                                value={birthYear}
-                                                onChange={(e) => setBirthYear(e.target.value)}
-                                                placeholder="예: 2005"
-                                                className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium"
-                                            />
-                                        </div>
                                     </div>
                                     <div className="pt-4 flex gap-2">
                                         <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 py-3 px-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl text-slate-600 dark:text-slate-300 font-bold transition-colors">

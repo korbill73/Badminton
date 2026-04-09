@@ -141,6 +141,12 @@ const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, per
 };
 
 export default function MomentumChart({ data }: MomentumChartProps) {
+    const [isMounted, setIsMounted] = React.useState(false);
+
+    React.useEffect(() => {
+        setIsMounted(true);
+    }, []);
+
     const { chartData, domainY, kpis } = useMemo(() => {
         if (!data || data.length === 0) return { chartData: [], domainY: [-10, 10], kpis: null };
 
@@ -206,6 +212,8 @@ export default function MomentumChart({ data }: MomentumChartProps) {
 
         return { winners, losses };
     }, [chartData]);
+
+    if (!isMounted) return <div className="h-[300px] w-full bg-slate-950/50 animate-pulse rounded-[32px]" />;
 
     if (!chartData || chartData.length === 0) return (
         <div className="h-full flex items-center justify-center bg-slate-950 rounded-[32px] border border-white/5 min-h-[400px]">

@@ -12,7 +12,11 @@ import {
     Trash2,
     Trophy,
     Target,
-    AlertCircle as AlertIcon
+    AlertCircle as AlertIcon,
+    Plus,
+    Minus,
+    Edit2,
+    Check
 } from 'lucide-react';
 import {
     PieChart,
@@ -23,6 +27,7 @@ import {
 } from 'recharts';
 import Link from 'next/link';
 import { BDPointLog } from '@/types';
+import SetNotesEditor from './SetNotesEditor';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -33,6 +38,7 @@ function cn(...inputs: ClassValue[]) {
 interface MobileScorePanelProps {
     match: any;
     logs: BDPointLog[];
+    categories: any[];
     matchId: string;
     currentSet: number;
     onSetChange: (set: number) => void;
@@ -40,11 +46,14 @@ interface MobileScorePanelProps {
     onPlayerReady: (p: any) => void;
     onShowStats?: () => void;
     onDeleteLog: (id: string) => Promise<void>;
+    onQuickRecord?: (isMyPoint: boolean) => void;
+    onEditLog?: (log: BDPointLog) => void;
 }
 
 export default function MobileScorePanel({
     match,
     logs,
+    categories,
     matchId,
     currentSet,
     onSetChange,
@@ -52,6 +61,8 @@ export default function MobileScorePanel({
     onPlayerReady,
     onShowStats,
     onDeleteLog,
+    onQuickRecord,
+    onEditLog,
 }: MobileScorePanelProps) {
     const [showHistory, setShowHistory] = useState(false);
 
@@ -61,32 +72,47 @@ export default function MobileScorePanel({
         ? lastLog.current_score.split('-').map(Number)
         : [0, 0];
 
-    const currentVideoId = (() => {
-        if (currentSet === 2 && match.youtube_video_id_2) return match.youtube_video_id_2;
-        if (currentSet === 3 && match.youtube_video_id_3) return match.youtube_video_id_3;
-        return match.youtube_video_id;
-    })();
+    const currentVideoId = match.youtube_video_id;
 
     // ── Analytics Calculation Logic ──
-    const processRanking = (data: BDPointLog[]) => {
-        const total = data.length;
-        const counts = data.reduce((acc: any, curr) => {
-            acc[curr.point_type] = (acc[curr.point_type] || 0) + 1;
-            return acc;
-        }, {});
-        return Object.keys(counts)
-            .map(name => ({
-                name,
-                value: counts[name],
-                percent: total > 0 ? Math.round((counts[name] / total) * 100) : 0
-            }))
-            .sort((a, b) => b.value - a.value);
-    };
+    const getCatGroup = (name: string) => categories?.find(c => c.name === name)?.category_group || 'others';
 
     const winners = currentSetLogs.filter(l => l.is_my_point);
     const losses = currentSetLogs.filter(l => !l.is_my_point);
-    const winnerData = processRanking(winners);
-    const lossData = processRanking(losses);
+
+    const allUsedWinningTypes = Array.from(new Set(winners.map(l => l.point_type)));
+    const allUsedErrorTypes = Array.from(new Set(losses.map(l => l.point_type)));
+
+    const winnerData = allUsedWinningTypes.map(type => {
+        const typeWinners = winners.filter(l => l.point_type === type).length;
+        const typeFailures = losses.filter(l =>
+            l.point_type.includes(type) &&
+            getCatGroup(l.point_type) === 'error'
+        ).length;
+        const typeTotalAttempts = typeWinners + typeFailures;
+        const successRate = (typeWinners / (typeTotalAttempts || 1)) * 100;
+        const contributionRate = (typeWinners / (winners.length || 1)) * 100;
+
+        return {
+            name: type,
+            value: typeWinners,
+            percent: Math.round(contributionRate),
+            rate: Math.round(successRate)
+        };
+    }).filter(d => d.value > 0).sort((a, b) => b.value - a.value);
+
+    const lossData = allUsedErrorTypes.map(type => {
+        const typeErrors = losses.filter(l => l.point_type === type).length;
+        const contributionRate = (typeErrors / (losses.length || 1)) * 100;
+        const isUnforced = getCatGroup(type) === 'error';
+
+        return {
+            name: type,
+            value: typeErrors,
+            percent: Math.round(contributionRate),
+            isUnforced
+        };
+    }).filter(d => d.value > 0).sort((a, b) => b.value - a.value);
 
     const COLORS_WIN = ['#60A5FA', '#3B82F6', '#2563EB', '#1D4ED8', '#1E40AF'];
     const COLORS_LOSS = ['#FB7185', '#F43F5E', '#E11D48', '#BE123C', '#9F1239'];
@@ -94,7 +120,6 @@ export default function MobileScorePanel({
     const handleSeekToLog = (timestamp: number) => {
         if (player && timestamp > 0) {
             player.seekTo(timestamp);
-            player.playVideo();
         }
     };
 
@@ -109,9 +134,8 @@ export default function MobileScorePanel({
         const x = cx + radius * Math.cos(-midAngle * RADIAN);
         const y = cy + radius * Math.sin(-midAngle * RADIAN);
 
-        // 상위 3개만 텍스트 표시 (공간 확보 및 가독성)
-        // 비중이 너무 적거나(5% 미만) 순위가 낮으면 표시하지 않음
-        if (percent < 0.05 || index > 2) return null;
+        // 비중이 너무 작으면 텍스트 레이블 숨김 (Pie 차트 겹침 및 가독성 확보)
+        if (percent < 0.03) return null;
 
         return (
             <g>
@@ -142,7 +166,7 @@ export default function MobileScorePanel({
     return (
         <div className="flex flex-col h-dvh bg-slate-950 text-white overflow-hidden">
             {/* ── Header ── */}
-            <div className="flex items-center gap-2 px-4 pt-safe pt-3 pb-2 shrink-0 bg-slate-900/80 backdrop-blur border-b border-white/5">
+            <div className="flex items-center gap-2 px-4 pt-3 pb-2 shrink-0 bg-slate-900/80 backdrop-blur border-b border-white/5" style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}>
                 <Link
                     href={`/tournaments/detail?id=${match.tournament_id}`}
                     className="p-2 rounded-xl bg-white/10 text-white active:bg-white/20 transition"
@@ -170,7 +194,8 @@ export default function MobileScorePanel({
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto pb-24">
+            {/* ── Main Scrollable Content ── */}
+            <div className="flex-1 overflow-y-auto" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
                 {/* ── Video ── */}
                 <div className="bg-black">
                     {currentVideoId ? (
@@ -185,31 +210,154 @@ export default function MobileScorePanel({
                     )}
                 </div>
 
-                {/* ── Score & Analysis Toggle ── */}
-                <div className="px-4 py-4 flex items-center justify-between bg-gradient-to-b from-slate-900 to-slate-950 border-b border-white/5">
-                    <div className="flex items-center gap-6 flex-1 justify-center">
+                {/* ── Score & Quick Record ── */}
+                <div className="px-4 py-3 flex items-center justify-between bg-gradient-to-b from-slate-900 to-slate-950 border-b border-white/5 gap-3">
+                    {/* Loss Button (-) */}
+                    <button
+                        onClick={() => onQuickRecord?.(false)}
+                        className="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center active:scale-90 transition text-rose-400"
+                    >
+                        <Minus className="w-6 h-6" />
+                    </button>
+
+                    <div className="flex items-center gap-4 flex-1 justify-center">
                         <div className="text-center">
-                            <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">나</p>
-                            <p className={`text-5xl font-black tabular-nums ${scoreMe > scoreOpp ? 'text-blue-400' : 'text-white'}`}>
+                            <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest mb-0.5">ME</p>
+                            <p className={`text-3xl font-black tabular-nums ${scoreMe > scoreOpp ? 'text-blue-400' : 'text-white'}`}>
                                 {scoreMe}
                             </p>
                         </div>
-                        <div className="text-slate-700 text-2xl font-black pt-4">:</div>
+                        <div className="text-slate-700 text-xl font-black">:</div>
                         <div className="text-center">
-                            <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">상대</p>
-                            <p className={`text-5xl font-black tabular-nums ${scoreOpp > scoreMe ? 'text-rose-400' : 'text-white'}`}>
+                            <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest mb-0.5">OPP</p>
+                            <p className={`text-3xl font-black tabular-nums ${scoreOpp > scoreMe ? 'text-rose-400' : 'text-white'}`}>
                                 {scoreOpp}
                             </p>
                         </div>
                     </div>
 
+                    {/* Win Button (+) */}
+                    <button
+                        onClick={() => onQuickRecord?.(true)}
+                        className="w-12 h-12 rounded-2xl bg-blue-500/20 border border-blue-500/30 flex items-center justify-center active:scale-90 transition text-blue-400"
+                    >
+                        <Plus className="w-6 h-6" />
+                    </button>
+
                     <button
                         onClick={onShowStats}
-                        className="ml-4 p-3 rounded-2xl bg-blue-600 shadow-xl shadow-blue-500/20 active:scale-95 transition flex flex-col items-center gap-1"
+                        className="p-2.5 rounded-xl bg-slate-800 border border-white/10 active:scale-95 transition flex flex-col items-center"
                     >
-                        <BarChart3 className="w-6 h-6 text-white" />
-                        <span className="text-[8px] font-black">심층분석</span>
+                        <BarChart3 className="w-5 h-5 text-blue-400" />
+                        <span className="text-[7px] font-black mt-0.5 whitespace-nowrap">분석</span>
                     </button>
+                </div>
+
+                {/* ── Rally History (Inline, Desktop-Style) ── */}
+                <div className="px-3 py-4">
+                    <button
+                        onClick={() => setShowHistory(v => !v)}
+                        className="w-full flex items-center justify-between py-3 px-4 mb-3 rounded-2xl bg-slate-900/80 border border-white/10 active:bg-slate-800 transition"
+                    >
+                        <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+                                <Clock className="w-4 h-4 text-blue-400" />
+                            </div>
+                            <div className="text-left">
+                                <span className="text-xs font-black text-white">경기 기록</span>
+                                <span className="text-[10px] font-bold text-slate-500 ml-2">{currentSetLogs.length}개 랠리</span>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="px-2 py-0.5 rounded-lg bg-white/5 border border-white/5">
+                                <span className="text-[11px] font-black tabular-nums text-blue-400">{scoreMe}</span>
+                                <span className="text-[11px] font-black text-slate-600 mx-1">:</span>
+                                <span className="text-[11px] font-black tabular-nums text-rose-400">{scoreOpp}</span>
+                            </div>
+                            {showHistory ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
+                        </div>
+                    </button>
+
+                    {showHistory && (
+                        <div className="space-y-1.5">
+                            {recentLogs.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-12 text-slate-600">
+                                    <Trophy className="w-10 h-10 opacity-20 mb-3" />
+                                    <p className="text-xs font-black uppercase tracking-widest">기록된 랠리가 없습니다</p>
+                                </div>
+                            ) : (
+                                recentLogs.map((log) => (
+                                    <div
+                                        key={log.id}
+                                        className={cn(
+                                            "relative bg-slate-900 rounded-xl border transition-all flex items-center px-3 py-2.5 gap-3",
+                                            log.is_my_point
+                                                ? "border-blue-500/10 active:border-blue-500/40 active:bg-blue-500/10"
+                                                : "border-rose-500/10 active:border-rose-500/40 active:bg-rose-500/10"
+                                        )}
+                                    >
+                                        {/* Score Badge */}
+                                        <div
+                                            className={cn(
+                                                "shrink-0 w-16 flex items-center justify-center cursor-pointer rounded-lg h-9 border",
+                                                log.is_my_point
+                                                    ? "bg-blue-500/5 border-blue-500/10"
+                                                    : "bg-rose-500/5 border-rose-500/10"
+                                            )}
+                                            onClick={() => handleSeekToLog(log.video_timestamp ?? 0)}
+                                        >
+                                            <span className={cn(
+                                                "text-lg font-black tabular-nums tracking-tighter",
+                                                log.is_my_point ? "text-blue-400" : "text-rose-400"
+                                            )}>
+                                                {log.current_score}
+                                            </span>
+                                        </div>
+
+                                        {/* Point Type Label */}
+                                        <div
+                                            className="flex-1 min-w-0 cursor-pointer"
+                                            onClick={() => handleSeekToLog(log.video_timestamp ?? 0)}
+                                        >
+                                            <p className={cn(
+                                                "text-[13px] font-black truncate leading-tight",
+                                                log.is_my_point ? "text-white" : "text-slate-400"
+                                            )}>
+                                                {log.point_type}
+                                            </p>
+                                            {((log.video_timestamp ?? 0) > 0) && (
+                                                <p className="text-[10px] font-mono tabular-nums text-slate-600 mt-0.5">
+                                                    ⏱ {Math.floor((log.video_timestamp ?? 0) / 60)}:{String((log.video_timestamp ?? 0) % 60).padStart(2, '0')}
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        {/* Action Buttons */}
+                                        <div className="flex items-center gap-0.5 shrink-0">
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onEditLog?.(log);
+                                                }}
+                                                className="p-2 rounded-lg text-slate-600 active:text-blue-400 active:bg-blue-500/10 transition"
+                                            >
+                                                <Edit2 className="w-3.5 h-3.5" />
+                                            </button>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onDeleteLog(log.id);
+                                                }}
+                                                className="p-2 rounded-lg text-slate-600 active:text-rose-400 active:bg-rose-500/10 transition"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* ── Visual Analytics Section ── */}
@@ -292,7 +440,17 @@ export default function MobileScorePanel({
                                                 {idx + 1}
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <p className="text-lg font-black text-blue-100 break-keep leading-tight">{item.name}</p>
+                                                <p className="text-lg font-black text-blue-100 truncate">{item.name}</p>
+                                                <div className="flex items-center gap-3 mt-1">
+                                                    <div className="flex items-baseline gap-1">
+                                                        <span className="text-[10px] font-bold text-slate-400 uppercase">성공</span>
+                                                        <span className="text-sm font-black text-indigo-400 tabular-nums">{item.rate}%</span>
+                                                    </div>
+                                                    <div className="flex items-baseline gap-1 border-l border-white/10 pl-3">
+                                                        <span className="text-[10px] font-bold text-slate-400 uppercase">기여</span>
+                                                        <span className="text-sm font-black text-blue-400 tabular-nums">{item.percent}%</span>
+                                                    </div>
+                                                </div>
                                             </div>
                                             <div className="text-right shrink-0 px-2.5 py-1 bg-white/5 rounded-lg border border-white/5">
                                                 <span className="text-xl font-black text-white">{item.value}</span>
@@ -300,10 +458,9 @@ export default function MobileScorePanel({
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-3 pl-11">
-                                            <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
-                                                <div className="h-full bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.3)]" style={{ width: `${item.percent}%` }} />
+                                            <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
+                                                <div className="h-full bg-gradient-to-r from-blue-500 via-blue-400 to-indigo-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.5)]" style={{ width: `${item.percent}%` }} />
                                             </div>
-                                            <span className="text-xs font-black text-blue-400 tabular-nums w-10 text-right">{item.percent}%</span>
                                         </div>
                                     </div>
                                 ))}
@@ -326,7 +483,17 @@ export default function MobileScorePanel({
                                                 {idx + 1}
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <p className="text-lg font-black text-rose-100 break-keep leading-tight">{item.name}</p>
+                                                <p className="text-lg font-black text-rose-100 truncate">{item.name}</p>
+                                                <div className="flex items-center gap-3 mt-1">
+                                                    <div className="flex items-baseline gap-1">
+                                                        <span className="text-[10px] font-bold text-slate-400 uppercase">종류</span>
+                                                        <span className="text-sm font-black text-rose-400 tabular-nums">{item.isUnforced ? '비강제' : '피습'}</span>
+                                                    </div>
+                                                    <div className="flex items-baseline gap-1 border-l border-white/10 pl-3">
+                                                        <span className="text-[10px] font-bold text-slate-400 uppercase">기여</span>
+                                                        <span className="text-sm font-black text-rose-400 tabular-nums">{item.percent}%</span>
+                                                    </div>
+                                                </div>
                                             </div>
                                             <div className="text-right shrink-0 px-2.5 py-1 bg-white/5 rounded-lg border border-white/5">
                                                 <span className="text-xl font-black text-white">{item.value}</span>
@@ -334,10 +501,9 @@ export default function MobileScorePanel({
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-3 pl-11">
-                                            <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
-                                                <div className="h-full bg-rose-500 rounded-full shadow-[0_0_8px_rgba(244,63,94,0.3)]" style={{ width: `${item.percent}%` }} />
+                                            <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
+                                                <div className="h-full bg-gradient-to-r from-rose-500 via-rose-400 to-pink-500 rounded-full shadow-[0_0_8px_rgba(244,63,94,0.5)]" style={{ width: `${item.percent}%` }} />
                                             </div>
-                                            <span className="text-xs font-black text-rose-400 tabular-nums w-10 text-right">{item.percent}%</span>
                                         </div>
                                     </div>
                                 ))}
@@ -348,60 +514,17 @@ export default function MobileScorePanel({
                         </div>
                     </div>
                 </div>
-            </div>
 
-            {/* ── Recent History (Floating Bottom) ── */}
-            <div className="fixed bottom-0 left-0 right-0 z-50 bg-slate-900/90 backdrop-blur-xl border-t border-white/10 px-4 pb-safe">
-                <button
-                    onClick={() => setShowHistory(v => !v)}
-                    className="w-full flex items-center justify-between py-4 text-xs font-black text-slate-300"
-                >
-                    <div className="flex items-center gap-2">
-                        <Clock className="w-3.5 h-3.5 text-blue-400" />
-                        <span>전체 경기 히스토리 ({currentSetLogs.length})</span>
-                    </div>
-                    {showHistory ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
-                </button>
-                {showHistory && (
-                    <div className="pb-4 space-y-2 max-h-[40vh] overflow-y-auto">
-                        {recentLogs.map((log) => (
-                            <div
-                                key={log.id}
-                                className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-xs
-                                    ${log.is_my_point ? 'bg-blue-500/5 border border-blue-500/10' : 'bg-rose-500/5 border border-rose-500/10'}
-                                `}
-                            >
-                                <div
-                                    className="flex items-center gap-4 flex-1 min-w-0 cursor-pointer active:opacity-60 transition-opacity"
-                                    onClick={() => handleSeekToLog(log.video_timestamp ?? 0)}
-                                >
-                                    <span className={`text-base font-black tabular-nums ${log.is_my_point ? 'text-blue-400' : 'text-rose-400'}`}>
-                                        {log.current_score}
-                                    </span>
-                                    <span className={`font-bold flex-1 truncate ${log.is_my_point ? 'text-blue-200' : 'text-rose-200'}`}>
-                                        {log.is_my_point ? '✅' : '❌'} {log.point_type}
-                                    </span>
-                                    {((log.video_timestamp ?? 0) > 0) && (
-                                        <span className="text-slate-500 font-mono tabular-nums shrink-0">
-                                            {Math.floor((log.video_timestamp ?? 0) / 60)}:{String((log.video_timestamp ?? 0) % 60).padStart(2, '0')}
-                                        </span>
-                                    )}
-                                </div>
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        onDeleteLog(log.id);
-                                    }}
-                                    className="p-2 rounded-xl text-slate-600 active:text-rose-400 active:bg-rose-500/10 transition"
-                                >
-                                    <Trash2 className="w-4 h-4" />
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                )}
+                {/* ── Set Notes Editor ── */}
+                <div className="px-4 pb-8">
+                    <SetNotesEditor
+                        key={`${matchId}-mobile-set-${currentSet}`}
+                        matchId={matchId}
+                        setNumber={currentSet}
+                        dark={true}
+                    />
+                </div>
             </div>
-
         </div>
     );
 }

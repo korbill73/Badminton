@@ -1,0 +1,26 @@
+# Fix Next.js App Router RSC payload routing for Cloudflare Pages static export
+# Next.js client requests:  /path/__next.segment1.segment2.txt
+# Files on disk are at:    /path/__next.segment1/segment2.txt (nested directories)
+
+# ── analysis/detail ──
+/analysis/detail/__next.analysis.detail.txt /analysis/detail/__next.analysis/detail.txt 200
+/analysis/detail/__next.analysis.detail.__PAGE__.txt /analysis/detail/__next.analysis/detail/__PAGE__.txt 200
+
+# ── tournaments/detail ──
+/tournaments/detail/__next.tournaments.detail.txt /tournaments/detail/__next.tournaments/detail.txt 200
+/tournaments/detail/__next.tournaments.detail.__PAGE__.txt /tournaments/detail/__next.tournaments/detail/__PAGE__.txt 200
+
+# ── analysis list page ──
+/analysis/__next.analysis.__PAGE__.txt /analysis/__next.analysis/__PAGE__.txt 200
+
+# ── tournaments list page ──
+/tournaments/__next.tournaments.__PAGE__.txt /tournaments/__next.tournaments/__PAGE__.txt 200
+
+# ── players page ──
+/players/__next.players.__PAGE__.txt /players/__next.players/__PAGE__.txt 200
+
+# ── performance page ──
+/performance/__next.performance.__PAGE__.txt /performance/__next.performance/__PAGE__.txt 200
+
+# ── not-found page ──
+/_not-found/__next._not-found.__PAGE__.txt /_not-found/__next._not-found/__PAGE__.txt 200

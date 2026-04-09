@@ -23,9 +23,8 @@ function cn(...inputs: ClassValue[]) {
 
 const navItems = [
     { name: '대시보드', href: '/', icon: LayoutDashboard },
-    { name: '대회 기록', href: '/tournaments', icon: Trophy },
+    { name: '경기 기록', href: '/tournaments', icon: Trophy },
     { name: '선수 관리', href: '/players', icon: Users },
-    { name: '분석 & 영상', href: '/analysis', icon: Video },
     { name: '트레이닝 지표', href: '/performance', icon: Activity },
 ];
 
