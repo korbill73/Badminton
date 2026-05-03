@@ -3,152 +3,101 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import {
-    LayoutDashboard,
-    Trophy,
-    Users,
-    Video,
-    Settings,
+import { 
+    LayoutDashboard, 
+    Trophy, 
+    Users2, 
+    BarChart3, 
     LogOut,
-    ChevronRight,
-    Activity,
-    MoreHorizontal
+    UserCircle,
+    Settings,
+    Database,
+    BookOpen,
+    Search
 } from 'lucide-react';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-
-function cn(...inputs: ClassValue[]) {
-    return twMerge(clsx(inputs));
-}
-
-const navItems = [
-    { name: '대시보드', href: '/', icon: LayoutDashboard },
-    { name: '경기 기록', href: '/tournaments', icon: Trophy },
-    { name: '선수 관리', href: '/players', icon: Users },
-    { name: '트레이닝 지표', href: '/performance', icon: Activity },
-];
+import { cn } from '@/lib/utils';
 
 export default function Sidebar() {
     const pathname = usePathname();
-    const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+
+    const menuItems = [
+        { name: '대시보드', icon: LayoutDashboard, href: '/' },
+        { name: '경기 기록', icon: Trophy, href: '/tournaments' },
+        { name: '선수 관리', icon: Users2, href: '/players' },
+        { name: '트레이닝 지표', icon: BarChart3, href: '/performance' },
+        { name: '프로 분석실', icon: Search, href: '/pro-archive' },
+        { name: '데이터 백업', icon: Database, href: '/backup' },
+        { name: '시스템 매뉴얼', icon: BookOpen, href: '/guide' }
+    ];
 
     return (
-        <>
-            {/* Desktop Sidebar */}
-            <div className="hidden lg:flex flex-col h-screen w-64 bg-[#0f172a] text-slate-400 border-r border-slate-800">
-                <div className="p-6 flex items-center gap-3">
-                    <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">
-                        B
+        <aside className="w-[280px] bg-[#0b1221] text-white flex flex-col h-screen fixed left-0 top-0 z-50">
+            {/* Logo Section */}
+            <div className="p-8 pb-10">
+                <Link href="/" className="flex items-center gap-3 group">
+                    <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/20 group-hover:scale-105 transition-transform">
+                        <span className="text-white font-black text-2xl italic italic">B</span>
                     </div>
-                    <span className="text-white font-bold text-xl tracking-tight">EliteBadminton</span>
-                </div>
-
-                <nav className="flex-1 px-4 py-4 space-y-1">
-                    {navItems.map((item) => {
-                        const isActive = pathname === item.href;
-                        return (
-                            <Link
-                                key={item.name}
-                                href={item.href}
-                                className={cn(
-                                    "flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors group",
-                                    isActive
-                                        ? "bg-blue-600/10 text-blue-500"
-                                        : "hover:bg-slate-800 hover:text-white"
-                                )}
-                            >
-                                <item.icon className={cn("w-5 h-5", isActive ? "text-blue-500" : "group-hover:text-white")} />
-                                <span>{item.name}</span>
-                                {isActive && <div className="ml-auto w-1.5 h-1.5 bg-blue-500 rounded-full" />}
-                            </Link>
-                        );
-                    })}
-                </nav>
-
-                <div className="p-4 mt-auto border-t border-slate-800">
-                    <div className="flex items-center gap-3 p-3 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer">
-                        <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white">
-                            JD
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-white truncate">홍길동 선수</p>
-                            <p className="text-xs text-slate-500 truncate">Pro Team</p>
-                        </div>
-                        <Settings className="w-4 h-4 hover:text-white" />
-                    </div>
-                    <button className="w-full flex items-center gap-3 px-3 py-3 mt-2 text-sm font-medium rounded-lg hover:bg-red-500/10 hover:text-red-500 transition-colors">
-                        <LogOut className="w-5 h-5" />
-                        <span>로그아웃</span>
-                    </button>
-                </div>
+                    <span className="text-white font-black text-xl tracking-tighter">EliteBadminton</span>
+                </Link>
             </div>
 
-            {/* Mobile Bottom Navigation */}
-            <div className="lg:hidden fixed bottom-0 left-0 right-0 z-[100] h-16 bg-[#0f172a]/95 backdrop-blur-xl border-t border-slate-700/50 flex items-center justify-around px-2 pb-safe shadow-[0_-10px_40px_rgba(0,0,0,0.3)]">
-                {[...navItems.slice(0, 4)].map((item) => {
-                    const isActive = pathname === item.href;
+            {/* Navigation Menu */}
+            <nav className="flex-1 px-4 space-y-2">
+                {menuItems.map((item) => {
+                    const isActive = pathname === item.href || (item.href !== '/' && pathname?.startsWith(item.href));
                     return (
                         <Link
                             key={item.name}
                             href={item.href}
                             className={cn(
-                                "flex flex-col items-center justify-center gap-1 w-full h-full transition-all relative",
-                                isActive ? "text-blue-500" : "text-slate-500 active:scale-95"
+                                "flex items-center gap-4 px-6 py-4 rounded-2xl text-[15px] font-black tracking-tight transition-all duration-300 group relative overflow-hidden",
+                                isActive 
+                                    ? "bg-blue-600/15 text-white shadow-[0_0_20px_rgba(37,99,235,0.1)]" 
+                                    : "text-white hover:bg-white/5 hover:pl-8"
                             )}
                         >
-                            <item.icon className={cn("w-5 h-5", isActive && "animate-in zoom-in-75 duration-300")} />
-                            <span className="text-[9px] font-black uppercase tracking-tighter">{item.name}</span>
+                            {/* Active Indicator Bar */}
                             {isActive && (
-                                <div className="absolute top-0 w-8 h-1 bg-blue-500 rounded-b-lg transition-all animate-in slide-in-from-top-1 duration-500" />
+                                <div className="absolute left-0 top-1/4 bottom-1/4 w-1 bg-blue-500 rounded-r-full shadow-[0_0_10px_rgba(59,130,246,0.8)]" />
                             )}
+                            
+                            <item.icon className={cn(
+                                "w-5 h-5 transition-all duration-300", 
+                                isActive 
+                                    ? "text-blue-500 scale-110" 
+                                    : "text-white/40 group-hover:text-blue-400 group-hover:scale-110"
+                            )} />
+                            <span className={cn(
+                                "transition-all duration-300",
+                                !isActive && "opacity-80 group-hover:opacity-100 group-hover:translate-x-1"
+                            )}>
+                                {item.name}
+                            </span>
                         </Link>
                     );
                 })}
+            </nav>
 
-                {/* Mobile More Button */}
-                <button
-                    onClick={() => setIsMenuOpen(!isMenuOpen)}
-                    className={cn(
-                        "flex flex-col items-center justify-center gap-1 w-full h-full transition-all relative",
-                        isMenuOpen ? "text-blue-500" : "text-slate-500 active:scale-95"
-                    )}
-                >
-                    <MoreHorizontal className="w-5 h-5" />
-                    <span className="text-[9px] font-black uppercase tracking-tighter">메뉴</span>
+            {/* Profile & Footer Section */}
+            <div className="p-6 mt-auto space-y-4 border-t border-white/5 bg-[#080d1a]">
+                <div className="flex items-center gap-3 px-2 py-2">
+                    <div className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center border border-white/10 shrink-0">
+                        <UserCircle className="w-6 h-6 text-slate-400" />
+                    </div>
+                    <div className="min-w-0">
+                        <p className="text-sm font-black text-white truncate">홍길동 선수</p>
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest truncate">Pro Team Player</p>
+                    </div>
+                    <button className="ml-auto text-slate-500 hover:text-white">
+                        <Settings className="w-4 h-4" />
+                    </button>
+                </div>
+                <button className="w-full flex items-center gap-3 px-6 py-4 text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 rounded-2xl transition-all text-xs font-black uppercase tracking-widest group">
+                    <LogOut className="w-4 h-4 text-slate-600 group-hover:text-rose-500" />
+                    로그아웃
                 </button>
-
-                {/* Mobile Menu Overlay */}
-                {isMenuOpen && (
-                    <>
-                        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[-1] animate-in fade-in duration-300" onClick={() => setIsMenuOpen(false)} />
-                        <div className="absolute bottom-16 right-0 w-56 bg-[#0f172a] border-t border-l border-slate-700 rounded-tl-3xl p-3 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
-                            <div className="flex items-center gap-3 p-3 border-b border-slate-800 mb-2">
-                                <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white text-sm font-bold">JD</div>
-                                <div className="min-w-0">
-                                    <p className="text-sm font-bold text-white truncate">홍길동 선수</p>
-                                    <p className="text-[10px] text-slate-500">Pro Team Member</p>
-                                </div>
-                            </div>
-                            <Link
-                                href="/performance"
-                                className="flex items-center gap-3 px-3 py-3 text-sm font-bold text-slate-400 hover:text-white rounded-xl hover:bg-white/5"
-                                onClick={() => setIsMenuOpen(false)}
-                            >
-                                <Activity className="w-4 h-4" />
-                                <span>트레이닝 지표</span>
-                            </Link>
-                            <button className="w-full flex items-center gap-3 px-3 py-3 text-sm font-bold text-slate-400 hover:text-white rounded-xl hover:bg-white/5">
-                                <Settings className="w-4 h-4" />
-                                <span>설정</span>
-                            </button>
-                            <button className="w-full flex items-center gap-3 px-3 py-3 text-sm font-bold text-red-400 hover:bg-red-500/10 rounded-xl mt-2">
-                                <LogOut className="w-4 h-4" />
-                                <span>로그아웃</span>
-                            </button>
-                        </div>
-                    </>
-                )}
             </div>
-        </>
+        </aside>
     );
 }

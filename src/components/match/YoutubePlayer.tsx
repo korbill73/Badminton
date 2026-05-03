@@ -35,6 +35,8 @@ export default function YoutubePlayer({ videoId, onPlayerReady }: YoutubePlayerP
         },
     }), []);
 
+    const ytRef = React.useRef<any>(null);
+
     const onReady: YouTubeProps['onReady'] = React.useCallback((event: any) => {
         onPlayerReady(event.target);
     }, [onPlayerReady]);
@@ -43,6 +45,7 @@ export default function YoutubePlayer({ videoId, onPlayerReady }: YoutubePlayerP
         <div className="aspect-video w-full rounded-xl overflow-hidden bg-black shadow-lg">
             {cleanVideoId ? (
                 <YouTube
+                    ref={ytRef}
                     videoId={cleanVideoId}
                     opts={opts}
                     onReady={onReady}

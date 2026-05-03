@@ -32,7 +32,7 @@ export default function AnalysisArchivePage() {
     const fetchMatches = async () => {
         setLoading(true);
         try {
-            const { data, error } = await supabase
+            const { data: mData, error } = await supabase
                 .from('bd_matches')
                 .select(`
                     *,
@@ -44,7 +44,72 @@ export default function AnalysisArchivePage() {
                 .order('match_date', { ascending: false });
 
             if (error) throw error;
-            setMatches(data || []);
+            
+            const matchesWithLogs = mData || [];
+            
+            // Fetch all logs for these matches to calculate scores
+            const matchIds = matchesWithLogs.map(m => m.id);
+            if (matchIds.length > 0) {
+                const { data: lData } = await supabase
+                    .from('bd_point_logs')
+                    .select('match_id, set_number, current_score, video_timestamp, created_at')
+                    .in('match_id', matchIds)
+                    .order('created_at', { ascending: false }) // NEWEST FIRST
+                    .limit(5000);
+
+                const logsByMatch = (lData || []).reduce((acc: any, log) => {
+                    if (!acc[log.match_id]) acc[log.match_id] = {};
+                    const scores = (log.current_score || "").match(/\d+/g);
+                    if (!scores || scores.length < 2) return acc;
+                    const [newMe, newOpp] = scores.map(Number);
+                    
+                    const currentBest = acc[log.match_id][log.set_number];
+                    if (!currentBest) {
+                        acc[log.match_id][log.set_number] = log.current_score;
+                    } else {
+                        const bestScores = currentBest.match(/\d+/g);
+                        if (bestScores && bestScores.length >= 2) {
+                            const [bestMe, bestOpp] = bestScores.map(Number);
+                            if ((newMe + newOpp) > (bestMe + bestOpp)) {
+                                acc[log.match_id][log.set_number] = log.current_score;
+                            }
+                        }
+                    }
+                    return acc;
+                }, {});
+
+                // Sync back to matches and ENSURE 0-0 for empty logs
+                matchesWithLogs.forEach(m => {
+                    const matchLogs = logsByMatch[m.id] || {};
+                    // Correcting to use the actual database column names found in schema
+                    const s1 = matchLogs[1] || '0-0';
+                    const s2 = matchLogs[2] || '0-0';
+                    const s3 = matchLogs[3] || '0-0';
+                    
+                    const getNums = (s: string) => {
+                        const n = (s || "0-0").match(/\d+/g);
+                        return n && n.length >= 2 ? n.map(Number) : [0, 0];
+                    };
+                    
+                    const [p1, o1] = getNums(s1);
+                    const [p2, o2] = getNums(s2);
+                    const [p3, o3] = getNums(s3);
+
+                    m.set_1_score_player = p1; m.set_1_score_opponent = o1;
+                    m.set_2_score_player = p2; m.set_2_score_opponent = o2;
+                    m.set_3_score_player = p3; m.set_3_score_opponent = o3;
+                    
+                    let meSets = 0, oppSets = 0;
+                    if (p1 > o1) meSets++; else if (o1 > p1 && (p1 + o1 > 0)) oppSets++;
+                    if (p2 > o2) meSets++; else if (o2 > p2 && (p2 + o2 > 0)) oppSets++;
+                    if (p3 > o3) meSets++; else if (o3 > p3 && (p3 + o3 > 0)) oppSets++;
+                    
+                    m.my_set_score = meSets;
+                    m.opponent_set_score = oppSets;
+                });
+            }
+
+            setMatches(matchesWithLogs);
         } catch (err: any) {
             console.error('Error fetching matches:', err.message);
         } finally {
@@ -184,7 +249,7 @@ export default function AnalysisArchivePage() {
                                             <Calendar className="w-3 h-3 opacity-50" /> {match.match_date}
                                         </span>
                                     </div>
-                                    <h3 className="text-lg md:text-xl font-black text-slate-900 dark:text-white group-hover:text-blue-600 transition-colors truncate flex flex-wrap items-center gap-1 sm:gap-1.5 break-all sm:break-normal">
+                                    <h3 className="text-lg md:text-xl font-black text-slate-900 dark:text-white group-hover:text-blue-600 transition-colors flex flex-wrap items-center gap-1 sm:gap-1.5">
                                         <span className="shrink-0">박준서 {match.partner && `& ${match.partner.name}`}</span>
                                         <span className="text-slate-400 mx-0.5 opacity-50 font-medium shrink-0">vs</span>
                                         <span className="flex items-center flex-wrap gap-1 min-w-0 flex-1">
@@ -212,6 +277,23 @@ export default function AnalysisArchivePage() {
                                     <p className="text-2xl md:text-3xl font-black tabular-nums text-slate-900 dark:text-white flex items-center leading-none justify-start md:justify-end">
                                         {match.my_set_score} <span className="text-slate-400 dark:text-slate-500 px-1.5 font-black">:</span> {match.opponent_set_score}
                                     </p>
+                                    <div className="flex gap-1.5 mt-2 justify-start md:justify-end">
+                                        {(match.set_1_score_player ?? 0) + (match.set_1_score_opponent ?? 0) > 0 && (
+                                            <span className="text-[9px] font-bold text-yellow-500 bg-yellow-500/10 px-2.5 py-0.5 rounded-full border border-yellow-500/20 tabular-nums">
+                                                {match.set_1_score_player}:{match.set_1_score_opponent}
+                                            </span>
+                                        )}
+                                        {(match.set_2_score_player ?? 0) + (match.set_2_score_opponent ?? 0) > 0 && (
+                                            <span className="text-[9px] font-bold text-yellow-500 bg-yellow-500/10 px-2.5 py-0.5 rounded-full border border-yellow-500/20 tabular-nums">
+                                                {match.set_2_score_player}:{match.set_2_score_opponent}
+                                            </span>
+                                        )}
+                                        {(match.set_3_score_player ?? 0) + (match.set_3_score_opponent ?? 0) > 0 && (
+                                            <span className="text-[9px] font-bold text-yellow-500 bg-yellow-500/10 px-2.5 py-0.5 rounded-full border border-yellow-500/20 tabular-nums">
+                                                {match.set_3_score_player}:{match.set_3_score_opponent}
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
 
                                 <div className="w-[1px] h-10 bg-slate-100 dark:bg-slate-800 hidden md:block"></div>

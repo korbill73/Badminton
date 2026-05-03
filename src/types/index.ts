@@ -20,6 +20,12 @@ export interface BDPlayer {
   id: string;
   name: string;
   school_or_team?: string;
+  birth_year?: string;
+  elem_school?: string;
+  mid_school?: string;
+  high_school?: string;
+  univ_school?: string;
+  pro_team?: string;
   created_at: string;
 }
 
@@ -56,6 +62,12 @@ export interface BDMatch {
   partner?: BDPlayer;
   opponent_1?: BDPlayer;
   opponent_2?: BDPlayer;
+  set_1_score_player?: number;
+  set_1_score_opponent?: number;
+  set_2_score_player?: number;
+  set_2_score_opponent?: number;
+  set_3_score_player?: number;
+  set_3_score_opponent?: number;
 }
 
 export interface BDPointLog {

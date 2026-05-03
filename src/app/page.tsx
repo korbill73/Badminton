@@ -1,553 +1,444 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
-import {
-  Trophy,
-  Activity,
-  Target,
-  Plus,
-  ArrowUpRight,
-  ChevronRight,
-  Loader2,
-  Video,
-  Flame,
-  Zap,
-  ShieldCheck,
-  TrendingUp,
-} from 'lucide-react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
-import { BDMatch, BDPointLog } from '@/types';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { 
+    Trophy, 
+    Target, 
+    TrendingUp, 
+    Activity, 
+    BookOpen, 
+    ChevronRight,
+    Loader2,
+    ShieldCheck,
+    Zap,
+    AlertTriangle,
+    Server,
+    BarChart3,
+    ArrowUpRight
+} from 'lucide-react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { cn } from '@/lib/utils';
+import {
+    PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip,
+    BarChart, Bar, XAxis as BarXAxis, YAxis as BarYAxis, CartesianGrid, LabelList
+} from 'recharts';
 
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+const COLORS_WIN = ['#00d2ff', '#3a7bd5', '#7f00ff', '#e100ff', '#ff00cc', '#ff0066', '#ff4b2b', '#ff416c'];
+const COLORS_LOSS = ['#ff4b2b', '#ff416c', '#f7971e', '#ffd200', '#91ff00', '#00ff88', '#00dbde', '#fc00ff'];
+const COLORS_PRIMARY = ['#60a5fa', '#f87171', '#34d399', '#fbbf24', '#a78bfa', '#f472b6', '#22d3ee', '#38bdf8'];
 
-interface DashboardMatch extends BDMatch {
-  set_scores?: string[];
-}
+export default function Dashboard() {
+    const router = useRouter();
+    const [loading, setLoading] = useState(true);
+    const [filterType, setFilterType] = useState<'all' | '단식' | '복식'>('all');
+    const [stats, setStats] = useState({
+        totalMatches: 0,
+        winRate: 0,
+        totalPoints: 0,
+        opponentPoints: 0,
+        winLoss: { w: 0, l: 0 }
+    });
+    const [allLogs, setAllLogs] = useState<any[]>([]);
+    const [allMatches, setAllMatches] = useState<any[]>([]);
 
-import YearlyStatsWidget from '@/components/analytics/YearlyStatsWidget';
+    const initialWin = [
+        { group: '스매시', items: ['직선 스매시', '대각 스매시', '반 스매시'] }, 
+        { group: '드롭', items: ['직선', '대각(크로스)'] }, 
+        { group: '네트 플레이', items: ['헤어핀', '크로스 헤어핀', '푸시', '네트 킬'] }, 
+        { group: '기타 공격', items: ['드라이브', '클리어 공격', '롱서브', '행운의 득점'] }, 
+        { group: '상대 에러', items: ['언더 에러', '스매시 에러', '서브 에러', '클리어 에러', '기본기 에러', '백핸드 에러'] }
+    ];
+    const initialLoss = [
+        { group: '상대 공격 득점', items: ['스매시', '대각 스매시', '헤어핀', '크 헤어핀', '드롭', '헤 + 푸시'] }, 
+        { group: '전술 당함', items: ['페인트 모션', '코스 속임수', '템포 변화'] }, 
+        { group: '나의 에러', items: ['스매시 에러', '드롭 에러', '언더 에러', '헤어핀 에러', '클리어 에러', '기본기 에러'] }
+    ];
 
-export default function HomePage() {
-  const [recentMatches, setRecentMatches] = useState<DashboardMatch[]>([]);
-  const [allMatches, setAllMatches] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({
-    totalMatches: 0,
-    winRate: 0,
-    bestTechnique: { name: 'N/A', rate: 0 },
-    recentForm: [] as ('W' | 'L')[],
-    totalPoints: 0,
-    versusRecords: [] as { name: string; win: number; loss: number }[]
-  });
-
-  const fetchDashboardData = async () => {
-    setLoading(true);
-    try {
-      // 1. 최근 경기 가져오기
-      const { data: matches, error } = await supabase
-        .from('bd_matches')
-        .select(`
-          *,
-          tournament:bd_tournaments(name),
-          partner:bd_players!partner_id(name),
-          opponent_1:bd_players!opponent_1_id(name),
-          opponent_2:bd_players!opponent_2_id(name)
-        `)
-        .order('match_date', { ascending: false });
-
-      if (error) throw error;
-      const recentMatchesData = (matches || []) as DashboardMatch[];
-
-      // 1-1. 각 매치의 세트별 최종 점수 가져오기
-      const matchIds = recentMatchesData.map(m => m.id);
-      if (matchIds.length > 0) {
-        const { data: setLogs } = await supabase
-          .from('bd_point_logs')
-          .select('match_id, set_number, current_score, video_timestamp, created_at')
-          .in('match_id', matchIds)
-          .order('set_number', { ascending: true })
-          .order('video_timestamp', { ascending: true })
-          .order('created_at', { ascending: true });
-
-        if (setLogs) {
-          // PostgreSQL NULL ASC 정렬에서 NULL은 마지막에 옴.
-          // null set_number 로그가 마지막으로 처리되어 정확한 점수를 0:1로 덮어쓰는 버그 수정.
-          // 해결: null 로그를 먼저 처리(set 1 fallback), 이후 번호가 있는 로그가 덮어씀(항상 우선)
-          const matchSetScores: Record<string, string[]> = {};
-
-          // ── 1차 패스: null set_number 로그 (set 1 하위 호환) ──
-          setLogs
-            .filter(l => l.set_number === null)
-            .forEach(log => {
-              const setIdx = 0; // null → 항상 1세트
-              if (!matchSetScores[log.match_id]) matchSetScores[log.match_id] = [];
-              matchSetScores[log.match_id][setIdx] = log.current_score;
-            });
-
-          // ── 2차 패스: set_number가 있는 로그 (null을 덮어씀, 마지막 = 최종 점수) ──
-          setLogs
-            .filter(l => l.set_number !== null)
-            .forEach(log => {
-              const setIdx = (log.set_number as number) - 1;
-              if (!matchSetScores[log.match_id]) matchSetScores[log.match_id] = [];
-              matchSetScores[log.match_id][setIdx] = log.current_score;
-            });
-
-          recentMatchesData.forEach(m => {
-            m.set_scores = matchSetScores[m.id] || [];
-          });
+    useEffect(() => {
+        async function fetchAllData() {
+            setLoading(true);
+            try {
+                const { data: matches } = await supabase.from('bd_matches').select('*');
+                const { data: pointLogs } = await supabase.from('bd_point_logs').select('*');
+                setAllMatches(matches || []);
+                setAllLogs(pointLogs || []);
+            } finally {
+                setLoading(false);
+            }
         }
+        fetchAllData();
+    }, []);
 
-      }
+    // Filtered data based on match type
+    const filteredMatches = useMemo(() => {
+        if (filterType === 'all') return allMatches;
+        return allMatches.filter(m => m.match_type === filterType);
+    }, [allMatches, filterType]);
 
+    const filteredLogs = useMemo(() => {
+        const allowedIds = new Set(filteredMatches.map(m => m.id));
+        return allLogs.filter(l => allowedIds.has(l.match_id));
+    }, [allLogs, filteredMatches]);
 
+    // Recalculate stats for filtered view
+    const currentStats = useMemo(() => {
+        let w = 0, l = 0, totalP = 0, totalO = 0;
+        let tViews = 0, tDuration = 0;
 
-      setRecentMatches(recentMatchesData);
+        const parseStats = (raw: string) => {
+            if (!raw) return { view_count: 0, view_duration: 0 };
+            try {
+                const jsonMatch = raw.match(/\{.*\}/s);
+                if (jsonMatch) {
+                    const meta = JSON.parse(jsonMatch[0]);
+                    return meta.stats || { view_count: 0, view_duration: 0 };
+                }
+            } catch (e) {}
+            return { view_count: 0, view_duration: 0 };
+        };
 
-      // 2. 전체 경기 수 및 승수 조회
-      const { count: totalMatchCount } = await supabase
-        .from('bd_matches')
-        .select('*', { count: 'exact', head: true });
+        filteredMatches.forEach(m => {
+            const p1 = Number(m.set_1_score_player || 0), o1 = Number(m.set_1_score_opponent || 0);
+            const p2 = Number(m.set_2_score_player || 0), o2 = Number(m.set_2_score_opponent || 0);
+            const p3 = Number(m.set_3_score_player || 0), o3 = Number(m.set_3_score_opponent || 0);
+            totalP += (p1 + p2 + p3);
+            totalO += (o1 + o2 + o3);
+            const s1 = p1 > o1 ? 1 : 0, s2 = p2 > o2 ? 1 : 0, s3 = p3 > o3 ? 1 : 0;
+            if ((s1 + s2 + s3) >= 2) w++; else l++;
 
-      const { count: winCount } = await supabase
-        .from('bd_matches')
-        .select('*', { count: 'exact', head: true })
-        .eq('match_result', 'win');
-
-      // 3. 전체 누적 득점수 조회 (정확한 수치 반영을 위해 별도 카운트)
-      const { count: totalPointCount } = await supabase
-        .from('bd_point_logs')
-        .select('*', { count: 'exact', head: true })
-        .eq('is_my_point', true);
-
-      // 4. 최근 경기 흐름 (W, L)
-      const form = recentMatchesData.map(m => m.match_result === 'win' ? 'W' : 'L').reverse();
-
-      // 5. 기술 분석 (최근 200개 로그 기준)
-      const { data: logs } = await supabase
-        .from('bd_point_logs')
-        .select('point_type, is_my_point')
-        .order('created_at', { ascending: false })
-        .limit(200);
-
-      let topTech = { name: '없음', rate: 0 };
-      if (logs && logs.length > 0) {
-        const myPoints = logs.filter(l => l.is_my_point);
-        const techCounts: Record<string, number> = {};
-        myPoints.forEach(p => {
-          if (!p.point_type) return;
-          techCounts[p.point_type] = (techCounts[p.point_type] || 0) + 1;
+            const s = parseStats(m.summary || '');
+            tViews += s.view_count || 0;
+            tDuration += s.view_duration || 0;
         });
+        return {
+            totalMatches: filteredMatches.length,
+            winRate: filteredMatches.length ? Math.round((w / filteredMatches.length) * 100) : 0,
+            totalPoints: totalP,
+            opponentPoints: totalO,
+            winLoss: { w, l },
+            totalViews: tViews,
+            totalDuration: tDuration
+        };
+    }, [filteredMatches]);
 
-        const sortedTech = Object.entries(techCounts).sort((a, b) => b[1] - a[1]);
-        if (sortedTech.length > 0) {
-          const totalMyLogPoints = myPoints.length;
-          topTech = {
-            name: sortedTech[0][0],
-            rate: Math.round((sortedTech[0][1] / totalMyLogPoints) * 100)
-          };
-        }
-      }
-
-      setStats({
-        totalMatches: totalMatchCount || 0,
-        winRate: totalMatchCount ? Math.round(((winCount || 0) / totalMatchCount) * 100) : 0,
-        bestTechnique: topTech,
-        recentForm: form as ('W' | 'L')[],
-        totalPoints: totalPointCount || 0,
-        versusRecords: [] // Will be populated in next step or combined
-      });
-
-      // 6. 상대 전적 계산 및 연도별 전적 데이터
-      const { data: fetchAllMatches } = await supabase
-        .from('bd_matches')
-        .select('match_date, match_result, category, opponent_1:bd_players!opponent_1_id(name), opponent_2:bd_players!opponent_2_id(name)');
-
-      if (fetchAllMatches) {
-        setAllMatches(fetchAllMatches);
-        const records: Record<string, { win: number; loss: number }> = {};
-        fetchAllMatches.forEach(m => {
-          const opponents = [
-            Array.isArray(m.opponent_1) ? m.opponent_1[0] : m.opponent_1,
-            Array.isArray(m.opponent_2) ? m.opponent_2[0] : m.opponent_2
-          ].filter(Boolean) as any[];
-
-          if (m.category === 'doubles' && opponents.length === 2) {
-            const sorted = [...opponents].sort((a, b) => a.name.localeCompare(b.name));
-            const name = sorted.map(o => o.name).join(' & ');
-            if (!records[name]) records[name] = { win: 0, loss: 0 };
-            if (m.match_result === 'win') records[name].win++;
-            else records[name].loss++;
-          } else {
-            opponents.forEach(opponent => {
-              const name = opponent?.name || '알 수 없음';
-              if (!records[name]) records[name] = { win: 0, loss: 0 };
-              if (m.match_result === 'win') records[name].win++;
-              else records[name].loss++;
-            });
-          }
+    // Derived Chart Data (Win/Loss Primary & Technique)
+    const winPrimaryData = useMemo(() => {
+        const counts: Record<string, number> = {};
+        filteredLogs.filter(l => l.is_my_point).forEach(l => {
+            const pCat = initialWin.find(c => c.items.includes(l.point_type))?.group || '기타';
+            counts[pCat] = (counts[pCat] || 0) + 1;
         });
-        const versusRecords = Object.entries(records)
-          .map(([name, stat]) => ({ name, ...stat }))
-          .sort((a, b) => (b.win + b.loss) - (a.win + a.loss))
-          .slice(0, 5);
+        return Object.entries(counts).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+    }, [filteredLogs]);
 
-        setStats(prev => ({ ...prev, versusRecords }));
-      }
+    const lossPrimaryData = useMemo(() => {
+        const counts: Record<string, number> = {};
+        filteredLogs.filter(l => !l.is_my_point).forEach(l => {
+            const pCat = initialLoss.find(c => c.items.includes(l.point_type))?.group || '기타';
+            counts[pCat] = (counts[pCat] || 0) + 1;
+        });
+        return Object.entries(counts).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+    }, [filteredLogs]);
 
-    } catch (err: any) {
-      console.error('대시보드 데이터 로드 실패:', err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+    const winData = useMemo(() => {
+        const counts: Record<string, number> = {};
+        filteredLogs.filter(l => l.is_my_point).forEach(l => { counts[l.point_type] = (counts[l.point_type] || 0) + 1; });
+        return Object.entries(counts).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+    }, [filteredLogs]);
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
+    const lossData = useMemo(() => {
+        const counts: Record<string, number> = {};
+        filteredLogs.filter(l => !l.is_my_point).forEach(l => { counts[l.point_type] = (counts[l.point_type] || 0) + 1; });
+        return Object.entries(counts).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+    }, [filteredLogs]);
 
-  return (
-    <div className="space-y-8 pb-12">
-      {/* ── Header Area ── */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 pt-4">
-        <div>
-          <h1 className="text-3xl md:text-5xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
-            대시보드 <TrendingUp className="w-6 h-6 md:w-8 md:h-8 text-blue-600" />
-          </h1>
-          <p className="text-slate-500 mt-1 font-semibold text-sm md:text-lg">성장을 위한 데이터 분석, Elite Badminton 2.0</p>
+    const totalWin = winData.reduce((acc, d) => acc + d.value, 0);
+    const totalLoss = lossData.reduce((acc, d) => acc + d.value, 0);
+
+    const analysisText = useMemo(() => {
+        if (filteredLogs.length < 5) return { strength: '데이터 수집 중...', weakness: '데이터 수집 중...' };
+        const bestTech = winData[0];
+        const worstError = lossData[0];
+        let strength = bestTech ? `[${filterType === 'all' ? '종합' : filterType}] 누적 ${bestTech.value}회의 [${bestTech.name}] 득점이 가장 확실한 공격 루트입니다.` : '분석된 전술 패턴이 없습니다.';
+        let weakness = worstError ? `[${filterType === 'all' ? '종합' : filterType}] ${worstError.value}회의 [${worstError.name}] 실점을 최소화하는 것이 시급합니다.` : '치명적인 약점은 발견되지 않았습니다.';
+        return { strength, weakness };
+    }, [filteredLogs, winData, lossData, filterType]);
+
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const checkMobile = () => setIsMobile(window.innerWidth < 768);
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
+
+    const renderCustomizedLabel = ({ cx, cy, midAngle, outerRadius, percent, name, value }: any) => {
+        const RADIAN = Math.PI / 180;
+        const radius = isMobile ? outerRadius * 1.1 : outerRadius * 1.25; 
+        const x = cx + radius * Math.cos(-midAngle * RADIAN);
+        const y = cy + radius * Math.sin(-midAngle * RADIAN);
+        if (percent < 0.04) return null;
+        return (
+            <text x={x} y={y} fill="white" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={isMobile ? 9 : 11} fontWeight={900}>
+                {`${name} (${(percent * 100).toFixed(0)}%)`}
+            </text>
+        );
+    };
+
+    if (loading) return (
+        <div className="h-screen bg-[#080d1a] flex items-center justify-center">
+            <Loader2 className="w-12 h-12 animate-spin text-blue-500" />
         </div>
-        <Link href="/tournaments" className="w-full md:w-auto">
-          <button className="w-full group relative px-8 py-3.5 bg-blue-600 text-white rounded-2xl font-black flex items-center justify-center gap-2 overflow-hidden transition-all hover:bg-blue-500 active:scale-95 shadow-xl shadow-blue-500/20">
-            <Plus className="w-5 h-5" />
-            <span>새 경기 기록</span>
-          </button>
-        </Link>
-      </div>
+    );
 
-      {/* ── 누적 통계 요약 바 (Summary Bar) ── */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-4 md:p-6 shadow-sm overflow-x-auto">
-        <div className="flex items-center justify-around min-w-[400px] md:min-w-0">
-          <div className="flex flex-col items-center">
-            <span className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1">전체 누적 경기</span>
-            <div className="flex items-baseline gap-1">
-              <span className="text-xl md:text-3xl font-black text-slate-900 dark:text-white">{stats.totalMatches}</span>
-              <span className="text-[10px] md:text-sm font-bold text-slate-400">경기</span>
-            </div>
-          </div>
-          <div className="w-px h-10 bg-slate-100 dark:bg-slate-800" />
-          <div className="flex flex-col items-center">
-            <span className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1">통산 승률</span>
-            <div className="flex items-baseline gap-1">
-              <span className="text-xl md:text-3xl font-black text-emerald-500">{stats.winRate}</span>
-              <span className="text-[10px] md:text-sm font-bold text-slate-400">%</span>
-            </div>
-          </div>
-          <div className="w-px h-10 bg-slate-100 dark:bg-slate-800" />
-          <div className="flex flex-col items-center">
-            <span className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1">총 누적 득점</span>
-            <div className="flex items-baseline gap-1">
-              <span className="text-xl md:text-3xl font-black text-blue-600">{stats.totalPoints.toLocaleString()}</span>
-              <span className="text-[10px] md:text-sm font-bold text-slate-400">PTS</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <YearlyStatsWidget matches={allMatches} />
-
-      {/* ── 상세 지표 ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-        <StatCard
-          title="최근 경기 흐름"
-          value={
-            <div className="flex gap-1.5 items-center">
-              {stats.recentForm.length > 0 ? (
-                stats.recentForm.map((res, i) => (
-                  <div
-                    key={i}
-                    className={cn(
-                      "w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center text-xs font-black border-2",
-                      res === 'W' ? "bg-emerald-500/10 border-emerald-500 text-emerald-600" : "bg-rose-500/10 border-rose-500 text-rose-600"
-                    )}
-                  >
-                    {res}
-                  </div>
-                ))
-              ) : (
-                <span className="text-slate-300">-</span>
-              )}
-            </div>
-          }
-          icon={<Flame className="w-5 h-5" />}
-          color="orange"
-          description="최근 5경기의 승리/패배 기록입니다."
-        />
-        <StatCard
-          title="주력 득점 기술"
-          value={stats.bestTechnique.name}
-          subValue={`득점 점유율 ${stats.bestTechnique.rate}%`}
-          icon={<Target className="w-5 h-5" />}
-          color="indigo"
-          description="현재 경기에서 가장 효율적인 득점 수단입니다."
-        />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* ── 최근 분석 리포트 ── */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="flex justify-between items-center px-2">
-            <div>
-              <h2 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white">최근 분석 리포트</h2>
-              <p className="text-xs md:text-sm text-slate-400 font-medium">나의 경기 내용을 한눈에 확인하세요</p>
-            </div>
-            <Link href="/tournaments" className="px-3 py-2 text-[10px] md:text-xs font-black text-blue-600 hover:bg-blue-50 rounded-xl transition-all flex items-center gap-1 uppercase tracking-widest">
-              전체 보기 <ChevronRight className="w-4 h-4" />
-            </Link>
-          </div>
-
-          <div className="grid gap-3 md:gap-4">
-            {loading ? (
-              <div className="py-20 flex flex-col items-center justify-center text-slate-400 gap-4 bg-white/50 dark:bg-slate-900/50 rounded-[2.5rem] border border-slate-100 dark:border-slate-800">
-                <Loader2 className="w-8 h-8 animate-spin text-blue-500 opacity-50" />
-                <p className="font-bold text-sm animate-pulse">데이터를 수집하고 있습니다...</p>
-              </div>
-            ) : recentMatches.length === 0 ? (
-              <div className="py-20 text-center bg-white dark:bg-slate-900 rounded-[2.5rem] border-2 border-dashed border-slate-200 dark:border-slate-800 flex flex-col items-center gap-4">
-                <div className="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center">
-                  <Activity className="w-6 h-6 text-slate-300" />
+    return (
+        <div className="min-h-screen bg-[#080d1a] text-white p-4 md:p-12 space-y-8 md:space-y-12 overflow-y-auto custom-scrollbar shadow-inner">
+            
+            {/* GLOBAL HEADER */}
+            <div className="max-w-[1500px] mx-auto flex flex-col lg:flex-row justify-between items-center lg:items-center gap-8 bg-[#0b1221] p-6 md:p-12 rounded-3xl md:rounded-[4rem] border border-white/5 relative overflow-hidden shadow-[0_0_80px_rgba(37,99,235,0.05)]">
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-600/[0.03] to-transparent" />
+                <div className="relative z-10 space-y-4 text-center lg:text-left w-full">
+                    <div className="flex items-center justify-center lg:justify-start gap-3 text-blue-500 font-black tracking-[0.4em] text-[10px] uppercase">
+                        <Activity className="w-6 h-6 animate-pulse" /> MY BADMINTON PERFORMANCE DATA
+                    </div>
+                    <div className="flex flex-col gap-6">
+                        <h1 className="text-4xl md:text-7xl font-black tracking-tight md:tracking-tighter leading-none">나의 경기 기록 통계<span className="text-blue-600">.</span></h1>
+                        {/* Match Type Switcher */}
+                        <div className="flex bg-white/5 p-1 rounded-2xl md:rounded-[1.5rem] border border-white/10 mx-auto lg:mx-0 w-fit">
+                            {(['all', '단식', '복식'] as const).map((t) => (
+                                <button 
+                                    key={t} onClick={() => setFilterType(t)} 
+                                    className={cn(
+                                        "px-4 md:px-8 py-2 md:py-2.5 rounded-xl md:rounded-2xl text-[10px] md:text-[12px] font-black uppercase tracking-widest transition-all",
+                                        filterType === t ? "bg-blue-600 text-white shadow-xl" : "text-slate-500 hover:text-white"
+                                    )}
+                                >
+                                    {t === 'all' ? '통합' : t}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <p className="text-slate-400 font-medium text-base md:text-xl max-w-4xl leading-relaxed mx-auto lg:mx-0">
+                        최종 선택된 <span className="text-white font-black underline underline-offset-8 decoration-blue-500">{currentStats.totalMatches}경기</span>의 통합 빅데이터를 분석한 정밀 리포트입니다.
+                    </p>
                 </div>
-                <p className="text-slate-400 font-bold text-sm">아직 기록된 경기가 없습니다. 첫 발을 떼보세요!</p>
-              </div>
-            ) : (
-              recentMatches.map((match) => (
-                <Link key={match.id} href={`/analysis/detail?id=${match.id}`}>
-                  <div className="group relative bg-white dark:bg-slate-900 px-4 py-4 md:px-6 md:py-6 rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-sm hover:border-blue-500/50 hover:shadow-2xl transition-all duration-300 flex items-center justify-between cursor-pointer overflow-hidden active:scale-[0.98]">
-                    {/* Hover Gradient Overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-r from-blue-600/0 via-blue-600/0 to-blue-600/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-
-                    <div className="flex items-center gap-4 md:gap-6 relative">
-                      <div className={cn(
-                        "w-12 h-12 md:w-16 md:h-16 rounded-2xl flex items-center justify-center font-black text-xl md:text-2xl italic shadow-lg shrink-0 transition-transform group-hover:scale-110",
-                        match.match_result === 'win'
-                          ? "bg-emerald-500 text-white shadow-emerald-200 dark:shadow-none"
-                          : "bg-rose-500 text-white shadow-rose-200 dark:shadow-none"
-                      )}>
-                        {match.match_result === 'win' ? 'W' : 'L'}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 mb-2 flex-wrap">
-                          <span className="text-[10px] font-black px-2 py-0.5 bg-slate-900 text-white dark:bg-white dark:text-slate-900 rounded tracking-tighter uppercase shrink-0">
-                            {match.category}
-                          </span>
-                          <span className="text-xs font-bold text-slate-500 dark:text-slate-400 truncate">
-                            {match.tournament?.name || '일반 매치'}
-                          </span>
-                        </div>
-                        <h3 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white leading-tight truncate">
-                          박준서 {match.partner && `& ${match.partner.name}`} <span className="opacity-30 font-medium mx-1">vs</span> {match.opponent_1?.name} {match.opponent_2 && `& ${match.opponent_2.name}`}
-                        </h3>
-                        <p className="text-xs text-slate-400 font-bold mt-1.5 uppercase tracking-wider">{match.match_date}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-4 md:gap-8 relative">
-                      <div className="text-right flex flex-col items-end">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">SET SCORE</p>
-                        <div className="flex items-center gap-3 md:gap-6">
-                          <p className="text-2xl md:text-5xl font-black text-slate-900 dark:text-white tabular-nums tracking-tighter flex items-center leading-none">
-                            {match.my_set_score} <span className="text-slate-400 dark:text-slate-500 px-1.5 font-black">:</span> {match.opponent_set_score}
-                          </p>
-                          {/* ── Actual Set Scores ── */}
-                          <div className="flex gap-1.5 md:gap-2">
-                            {match.set_scores && match.set_scores.length > 0 ? (
-                              match.set_scores.map((score, i) => (
-                                <div key={i} className="flex flex-col items-center">
-                                  <span className="text-[9px] font-black text-slate-400 mb-1">S{i + 1}</span>
-                                  <span className="text-sm md:text-2xl font-black px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-blue-600 dark:text-blue-400 rounded-xl min-w-[3.5rem] text-center shadow-sm border border-slate-100 dark:border-slate-700">
-                                    {score.replace('-', ':')}
-                                  </span>
-                                </div>
-                              ))
-                            ) : (
-                              <span className="text-[10px] font-bold text-slate-300">점수 정보 없음</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="w-12 h-12 md:w-14 md:h-14 bg-slate-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
-                        <ArrowUpRight className="w-6 h-6 md:w-7 md:h-7" />
-                      </div>
-                    </div>
-                  </div>
+                <Link href="/guide" className="relative z-10 group flex items-center gap-4 px-8 md:px-10 py-5 md:py-7 bg-blue-600 text-white rounded-[2rem] hover:bg-blue-500 transition-all shadow-[0_0_50px_rgba(37,99,235,0.25)] shrink-0">
+                    <BookOpen className="w-6 h-6 md:w-7 md:h-7 group-hover:scale-110 transition-transform" />
+                    <span className="text-xl md:text-2xl font-black whitespace-nowrap">운영 매뉴얼</span>
                 </Link>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* ── 사이드바 인사이트 ── */}
-        <div className="space-y-6">
-          {/* Motivation Box */}
-          <div className="bg-gradient-to-br from-slate-900 to-slate-800 dark:from-blue-700 dark:to-blue-900 rounded-[2.5rem] p-8 md:p-10 text-white shadow-2xl relative overflow-hidden group border border-white/5">
-            <Zap className="absolute -right-6 -top-6 w-32 h-32 text-white/5 rotate-12 group-hover:scale-125 transition-transform duration-700" />
-            <div className="relative z-10">
-              <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center mb-6 backdrop-blur">
-                <Zap className="w-6 h-6 text-yellow-400 animate-pulse" />
-              </div>
-              <h3 className="text-2xl font-black mb-3">경기 분석 완료 🏸</h3>
-              <p className="text-slate-400 dark:text-blue-100 text-sm leading-relaxed font-medium">
-                작성하신 랠리 로그를 기반으로 인공지능이 강점과 약점을 분석 중입니다. <br /><br />
-                <span className="text-white">후반 15점 이후의 집중력</span>이 승률 확보의 핵심 포인트입니다.
-              </p>
-              <button className="mt-8 px-6 py-3 bg-white text-slate-900 rounded-xl text-sm font-black flex items-center gap-2 hover:bg-slate-100 transition-all active:scale-95">
-                AI 리포트 보기 <ArrowUpRight className="w-4 h-4" />
-              </button>
             </div>
-          </div>
 
-          {/* Versus Records - New Section */}
-          <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 p-8 shadow-sm">
-            <h3 className="font-black flex items-center gap-2 mb-6 text-xs text-slate-400 uppercase tracking-[0.2em]">
-              <Trophy className="w-4 h-4 text-amber-500" />
-              선수별 상대 전적
-            </h3>
-            <div className="space-y-4">
-              {stats.versusRecords && stats.versusRecords.length > 0 ? (
-                stats.versusRecords.map((record, i) => (
-                  <div key={i} className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-black text-slate-900 dark:text-white">{record.name}</span>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Total {record.win + record.loss} Matches</span>
+            <div className="max-w-[1500px] mx-auto space-y-8 md:space-y-12">
+                
+                {/* GLOBAL SUMMARY CARDS */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+                    <div className="bg-[#0f172a] border border-blue-500/20 p-8 md:p-12 rounded-3xl md:rounded-[3.5rem] flex flex-col gap-4 md:gap-5 relative overflow-hidden shadow-2xl group hover:border-blue-500/40 transition-all">
+                        <div className="absolute top-4 right-4 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><Target className="w-24 md:w-32 h-24 md:h-32 text-blue-400" /></div>
+                        <div className="flex items-center gap-3">
+                            <Zap className="w-5 h-5 md:w-6 md:h-6 text-blue-300" />
+                            <span className="text-[10px] md:text-sm font-black tracking-widest text-blue-300 uppercase underline decoration-blue-500/50 decoration-4 underline-offset-8 italic">최강 득점 무기 ({filterType === 'all' ? 'TOTAL' : filterType.toUpperCase()})</span>
+                        </div>
+                        <p className="text-white text-xl md:text-3xl font-black leading-tight pr-10">{analysisText.strength}</p>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <div className="text-right">
-                        <span className="text-lg font-black text-emerald-500">{record.win}</span>
-                        <span className="text-[10px] font-bold text-slate-300 mx-1">/</span>
-                        <span className="text-lg font-black text-rose-500">{record.loss}</span>
-                      </div>
-                      <div className="w-10 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden flex">
-                        <div
-                          className="bg-emerald-500 h-full"
-                          style={{ width: `${(record.win / (record.win + record.loss)) * 100}%` }}
-                        />
-                        <div
-                          className="bg-rose-500 h-full"
-                          style={{ width: `${(record.loss / (record.win + record.loss)) * 100}%` }}
-                        />
-                      </div>
+                    <div className="bg-[#0f172a] border border-rose-500/20 p-8 md:p-12 rounded-3xl md:rounded-[3.5rem] flex flex-col gap-4 md:gap-5 relative overflow-hidden shadow-2xl group hover:border-rose-500/40 transition-all">
+                        <div className="absolute top-4 right-4 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><AlertTriangle className="w-24 md:w-32 h-24 md:h-32 text-rose-400" /></div>
+                        <div className="flex items-center gap-3">
+                            <AlertTriangle className="w-5 h-5 md:w-6 md:h-6 text-rose-300" />
+                            <span className="text-[10px] md:text-sm font-black tracking-widest text-rose-300 uppercase underline decoration-rose-500/50 decoration-4 underline-offset-8 italic">치명적 실점 루트 ({filterType === 'all' ? 'TOTAL' : filterType.toUpperCase()})</span>
+                        </div>
+                        <p className="text-white text-xl md:text-3xl font-black leading-tight pr-10">{analysisText.weakness}</p>
                     </div>
-                  </div>
-                ))
-              ) : (
-                <div className="py-10 text-center text-slate-400 text-xs font-bold">
-                  데이터가 부족합니다.
                 </div>
-              )}
+
+                {/* KPI STATS */}
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 md:gap-8">
+                    <div className="bg-[#0b1221] p-6 md:p-10 rounded-3xl md:rounded-[2.5rem] border border-white/5 group hover:border-yellow-500/30 transition-all flex flex-col justify-between h-40 md:h-56 shadow-xl">
+                        <Trophy className="w-8 h-8 md:w-12 md:h-12 text-yellow-500 drop-shadow-[0_0_10px_rgba(234,179,8,0.3)]" />
+                        <div>
+                            <p className="text-slate-500 font-black text-[8px] md:text-[10px] uppercase tracking-widest mb-1">Total Victories</p>
+                            <h3 className="text-2xl md:text-5xl font-black text-white tracking-tighter">{currentStats.winLoss.w}<span className="text-[10px] md:text-sm text-slate-700 ml-2 font-bold italic">GAMES</span></h3>
+                        </div>
+                    </div>
+                    <div className="bg-[#0b1221] p-6 md:p-10 rounded-3xl md:rounded-[2.5rem] border border-white/5 group hover:border-rose-500/30 transition-all flex flex-col justify-between h-40 md:h-56 shadow-xl">
+                        <TrendingUp className="w-8 h-8 md:w-12 md:h-12 text-rose-500 drop-shadow-[0_0_10px_rgba(244,63,94,0.3)]" />
+                        <div>
+                            <p className="text-slate-500 font-black text-[8px] md:text-[10px] uppercase tracking-widest mb-1">Win Rate</p>
+                            <h3 className="text-2xl md:text-5xl font-black text-white tracking-tighter">{currentStats.winRate}<span className="text-[10px] md:text-sm text-slate-700 ml-2 font-bold italic">%</span></h3>
+                        </div>
+                    </div>
+                    <div className="bg-[#0b1221] p-6 md:p-10 rounded-3xl md:rounded-[2.5rem] border border-white/5 group hover:border-emerald-500/30 transition-all flex flex-col justify-between h-40 md:h-56 shadow-xl">
+                        <BarChart3 className="w-8 h-8 md:w-12 md:h-12 text-emerald-500 drop-shadow-[0_0_10px_rgba(16,185,129,0.3)]" />
+                        <div>
+                            <p className="text-slate-500 font-black text-[8px] md:text-[10px] uppercase tracking-widest mb-1">Analyzed Logs</p>
+                            <h3 className="text-2xl md:text-5xl font-black text-white tracking-tighter">{filteredLogs.length.toLocaleString()}<span className="text-[10px] md:text-sm text-slate-700 ml-2 font-bold italic">PTS</span></h3>
+                        </div>
+                    </div>
+                    <div className="bg-[#0b1221] p-6 md:p-10 rounded-3xl md:rounded-[2.5rem] border border-white/5 group hover:border-sky-500/30 transition-all flex flex-col justify-between h-40 md:h-56 shadow-xl">
+                        <Zap className="w-8 h-8 md:w-12 md:h-12 text-sky-500 drop-shadow-[0_0_10px_rgba(14,165,233,0.3)]" />
+                        <div>
+                            <p className="text-slate-500 font-black text-[8px] md:text-[10px] uppercase tracking-widest mb-1">Total Views</p>
+                            <h3 className="text-2xl md:text-5xl font-black text-white tracking-tighter">{currentStats.totalViews.toLocaleString()}<span className="text-[10px] md:text-sm text-slate-700 ml-2 font-bold italic">VIEWS</span></h3>
+                        </div>
+                    </div>
+                    <div className="bg-[#0b1221] p-6 md:p-10 rounded-3xl md:rounded-[2.5rem] border border-white/5 group hover:border-amber-500/30 transition-all flex flex-col justify-between h-40 md:h-56 shadow-xl col-span-2 md:col-span-1">
+                        <Activity className="w-8 h-8 md:w-12 md:h-12 text-amber-500 drop-shadow-[0_0_10px_rgba(245,158,11,0.3)]" />
+                        <div>
+                            <p className="text-slate-500 font-black text-[8px] md:text-[10px] uppercase tracking-widest mb-1">Play Time</p>
+                            <h3 className="text-2xl md:text-5xl font-black text-white tracking-tighter">{Math.floor(currentStats.totalDuration / 60)}<span className="text-[10px] md:text-sm text-slate-700 ml-2 font-bold italic">MINS</span></h3>
+                        </div>
+                    </div>
+                </div>
+
+                {/* TACTICAL DONUTS - 1ST LEVEL */}
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 md:gap-8">
+                    <div className="bg-[#0b1221] border border-white/5 p-6 md:p-12 rounded-3xl md:rounded-[4rem] shadow-2xl flex flex-col gap-6 md:gap-10">
+                        <div className="flex items-center gap-3">
+                            <Server className="w-6 h-6 md:w-8 md:h-8 text-blue-400" />
+                            <h3 className="text-xl md:text-3xl font-black text-white italic tracking-tighter uppercase">1차 전술 분포 리포트 (WIN)</h3>
+                        </div>
+                        <div className="h-[300px] md:h-[500px] relative">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart margin={{ top: 20, right: 30, bottom: 20, left: 30 }}>
+                                    <Pie data={winPrimaryData} innerRadius={isMobile ? 60 : 100} outerRadius={isMobile ? 90 : 150} paddingAngle={3} dataKey="value" stroke="none" label={renderCustomizedLabel} labelLine={false}>
+                                        {winPrimaryData.map((_, i) => <Cell key={`cell-${i}`} fill={COLORS_PRIMARY[i % COLORS_PRIMARY.length]} />)}
+                                    </Pie>
+                                    <RechartsTooltip contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '15px' }} />
+                                </PieChart>
+                            </ResponsiveContainer>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none mt-4">
+                                <span className="text-3xl md:text-7xl font-black text-white">{totalWin}</span>
+                                <span className="text-[8px] md:text-[11px] font-black text-slate-500 tracking-[0.4em] uppercase">Tactical Wins</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="bg-[#0b1221] border border-white/5 p-6 md:p-12 rounded-3xl md:rounded-[4rem] shadow-2xl flex flex-col gap-6 md:gap-10">
+                        <div className="flex items-center gap-3">
+                            <Server className="w-6 h-6 md:w-8 md:h-8 text-rose-500" />
+                            <h3 className="text-xl md:text-3xl font-black text-white italic tracking-tighter uppercase">1차 전술 분포 리포트 (LOSS)</h3>
+                        </div>
+                        <div className="h-[300px] md:h-[500px] relative">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart margin={{ top: 20, right: 30, bottom: 20, left: 30 }}>
+                                    <Pie data={lossPrimaryData} innerRadius={isMobile ? 60 : 100} outerRadius={isMobile ? 90 : 150} paddingAngle={3} dataKey="value" stroke="none" label={renderCustomizedLabel} labelLine={false}>
+                                        {lossPrimaryData.map((_, i) => <Cell key={`cell-${i}`} fill={COLORS_PRIMARY[(i + 4) % COLORS_PRIMARY.length]} />)}
+                                    </Pie>
+                                    <RechartsTooltip contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '15px' }} />
+                                </PieChart>
+                            </ResponsiveContainer>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none mt-4">
+                                <span className="text-3xl md:text-7xl font-black text-white">{totalLoss}</span>
+                                <span className="text-[8px] md:text-[11px] font-black text-slate-500 tracking-[0.4em] uppercase">Tactical Losses</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* TACTICAL DONUTS - 2ND LEVEL (PRECISION) */}
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 md:gap-8">
+                    <div className="bg-[#0b1221] border border-blue-500/20 p-6 md:p-12 rounded-3xl md:rounded-[4rem] shadow-2xl flex flex-col gap-6 md:gap-10">
+                        <div className="flex items-center gap-3">
+                            <Zap className="w-6 h-6 md:w-8 md:h-8 text-cyan-400" />
+                            <h3 className="text-xl md:text-3xl font-black text-cyan-50 italic tracking-tighter uppercase">2차 정밀 기술 분석 (WIN)</h3>
+                        </div>
+                        <div className="h-[300px] md:h-[500px] relative">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                                    <Pie data={winData} innerRadius={isMobile ? 60 : 100} outerRadius={isMobile ? 90 : 150} paddingAngle={3} dataKey="value" stroke="none" label={renderCustomizedLabel} labelLine={false}>
+                                        {winData.map((_, i) => <Cell key={`cell-${i}`} fill={COLORS_WIN[i % COLORS_WIN.length]} />)}
+                                    </Pie>
+                                    <RechartsTooltip contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '15px' }} />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                    <div className="bg-[#0b1221] border border-rose-500/20 p-6 md:p-12 rounded-3xl md:rounded-[4rem] shadow-2xl flex flex-col gap-6 md:gap-10">
+                        <div className="flex items-center gap-3">
+                            <AlertTriangle className="w-6 h-6 md:w-8 md:h-8 text-rose-400" />
+                            <h3 className="text-xl md:text-3xl font-black text-rose-50 italic tracking-tighter uppercase">2차 정밀 에러 분석 (LOSS)</h3>
+                        </div>
+                        <div className="h-[300px] md:h-[500px] relative">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                                    <Pie data={lossData} innerRadius={isMobile ? 60 : 100} outerRadius={isMobile ? 90 : 150} paddingAngle={3} dataKey="value" stroke="none" label={renderCustomizedLabel} labelLine={false}>
+                                        {lossData.map((_, i) => <Cell key={`cell-${i}`} fill={COLORS_LOSS[i % COLORS_LOSS.length]} />)}
+                                    </Pie>
+                                    <RechartsTooltip contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '15px' }} />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                </div>
+
+                {/* RANKING CHARTS */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12">
+                    <div className="bg-[#0b1221] border border-blue-500/20 p-8 md:p-12 rounded-3xl md:rounded-[4rem] shadow-2xl flex flex-col gap-8 md:gap-10">
+                        <h3 className="text-xl md:text-3xl font-black text-blue-300 tracking-[0.2em] uppercase text-center italic">Technique Ranking</h3>
+                        <div className="h-[400px] md:h-[450px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={winData.slice(0, 10)} layout="vertical" margin={{ top: 10, right: isMobile ? 40 : 120, left: 0, bottom: 10 }}>
+                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#ffffff05" />
+                                    <BarXAxis type="number" hide />
+                                    <BarYAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fill: '#ffffff90', fontSize: isMobile ? 11 : 15, fontWeight: 900 }} width={isMobile ? 80 : 140} />
+                                    <Bar dataKey="value" fill="url(#winGradient)" radius={[0, 10, 10, 0]} barSize={isMobile ? 20 : 30}>
+                                        <defs>
+                                            <linearGradient id="winGradient" x1="0" y1="0" x2="1" y2="0">
+                                                <stop offset="0%" stopColor="#3b82f6" />
+                                                <stop offset="100%" stopColor="#60a5fa" />
+                                            </linearGradient>
+                                        </defs>
+                                        <LabelList dataKey="value" position="right" formatter={(v: any) => `${v}회`} fill="#94a3b8" fontSize={isMobile ? 11 : 14} fontWeight={900} offset={10} />
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                    <div className="bg-[#0b1221] border border-rose-500/20 p-8 md:p-12 rounded-3xl md:rounded-[3.5rem] flex flex-col gap-8 md:gap-10 shadow-2xl relative overflow-hidden">
+                        <h3 className="text-xl md:text-3xl font-black text-rose-300 tracking-[0.2em] uppercase text-center italic">Error Ranking</h3>
+                        <div className="h-[400px] md:h-[450px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={lossData.slice(0, 10)} layout="vertical" margin={{ top: 10, right: isMobile ? 40 : 120, left: 0, bottom: 10 }}>
+                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#ffffff05" />
+                                    <BarXAxis type="number" hide />
+                                    <BarYAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fill: '#ffffff90', fontSize: isMobile ? 11 : 15, fontWeight: 900 }} width={isMobile ? 80 : 140} />
+                                    <Bar dataKey="value" fill="url(#lossGradient)" radius={[0, 10, 10, 0]} barSize={isMobile ? 20 : 30}>
+                                        <defs>
+                                            <linearGradient id="lossGradient" x1="0" y1="0" x2="1" y2="0">
+                                                <stop offset="0%" stopColor="#f43f5e" />
+                                                <stop offset="100%" stopColor="#fb7185" />
+                                            </linearGradient>
+                                        </defs>
+                                        <LabelList dataKey="value" position="right" formatter={(v: any) => `${v}회`} fill="#94a3b8" fontSize={isMobile ? 11 : 14} fontWeight={900} offset={10} />
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                </div>
+
+                {/* SECURITY FOOTER */}
+                <div className="bg-[#080d1a] p-8 md:p-16 rounded-[2rem] md:rounded-[5rem] border border-white/5 flex flex-col lg:flex-row items-center justify-between gap-8 md:gap-12 shadow-inner">
+                    <div className="flex flex-col md:flex-row items-center gap-6 md:gap-10 text-center md:text-left">
+                        <div className="p-5 md:p-7 bg-blue-600/10 rounded-2xl md:rounded-[2.5rem] border border-blue-500/20 shadow-2xl"><ShieldCheck className="w-10 h-10 md:w-14 md:h-14 text-blue-500" /></div>
+                        <div>
+                            <h4 className="text-xl md:text-4xl font-black tracking-tighter">유형별 전술 통합 정합성 완료</h4>
+                            <p className="text-slate-500 font-bold text-sm md:text-lg max-w-3xl leading-relaxed">
+                                글로벌 분석 엔진에 의해 모든 데이터가 실시간 동기화되고 있습니다.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
             </div>
-          </div>
-
-          {/* Quick Technical Highlights */}
-          <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 p-8 shadow-sm">
-            <h3 className="font-black flex items-center gap-2 mb-8 text-xs text-slate-400 uppercase tracking-[0.2em]">
-              <Target className="w-4 h-4 text-blue-500" />
-              경쟁력 데이터
-            </h3>
-            <div className="space-y-8">
-              <HighlightItem
-                title="스매시 공격력"
-                value={`${stats.winRate > 60 ? '최상위권' : '안정적'}`}
-                icon={<Flame className="w-4 h-4" />}
-                trend="+4.2%"
-                positive
-              />
-              <HighlightItem
-                title="범실 제어력"
-                value="상위 15%"
-                icon={<ShieldCheck className="w-4 h-4" />}
-                trend="매우 안정"
-                positive
-              />
-              <HighlightItem
-                title="네트 앞 장악력"
-                value="탁월함"
-                icon={<Zap className="w-4 h-4" />}
-                trend="+12%"
-                positive
-              />
-            </div>
-          </div>
+            
+            <style jsx global>{`
+                .custom-scrollbar::-webkit-scrollbar { width: ${isMobile ? '6px' : '8px'}; }
+                .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(59, 130, 246, 0.15); border-radius: 20px; }
+                .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+                body { background-color: #080d1a; overflow-x: hidden; }
+            `}</style>
         </div>
-      </div>
-    </div>
-  );
+    );
 }
-
-function StatCard({ title, value, subValue, unit, icon, color, description }: any) {
-  const iconBg = {
-    blue: "bg-blue-400/10",
-    green: "bg-emerald-400/10",
-    indigo: "bg-indigo-400/10",
-    orange: "bg-orange-400/10",
-  }[color as 'blue' | 'green' | 'indigo' | 'orange'];
-
-  const iconColor = {
-    blue: "text-blue-600",
-    green: "text-emerald-600",
-    indigo: "text-indigo-600",
-    orange: "text-orange-600",
-  }[color as 'blue' | 'green' | 'indigo' | 'orange'];
-
-  return (
-    <div className="bg-white dark:bg-slate-900 p-5 md:p-7 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-xl transition-all duration-300">
-      <div className="flex justify-between items-start mb-4 md:mb-6">
-        <div className={cn("p-3 rounded-2xl", iconBg)}>
-          <div className={cn("w-5 h-5", iconColor)}>
-            {icon}
-          </div>
-        </div>
-      </div>
-      <div>
-        <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{title}</p>
-        <div className="flex items-baseline gap-1">
-          <div className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white tracking-tighter">
-            {value}
-          </div>
-          {unit && <span className="text-xs md:text-sm font-bold text-slate-400 ml-0.5">{unit}</span>}
-        </div>
-        {subValue && (
-          <p className="text-[11px] md:text-xs font-bold text-indigo-500 mt-1">{subValue}</p>
-        )}
-        <p className="text-[11px] text-slate-400 font-medium mt-3 leading-relaxed">
-          {description}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function HighlightItem({ title, value, trend, positive, icon }: any) {
-  return (
-    <div className="flex items-center gap-4">
-      <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-blue-500 shrink-0">
-        {icon}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex justify-between items-center mb-0.5">
-          <p className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tighter truncate">{title}</p>
-          <span className={cn(
-            "text-[9px] font-black px-1.5 py-0.5 rounded",
-            positive ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
-          )}>
-            {trend}
-          </span>
-        </div>
-        <p className="text-[13px] md:text-sm font-black text-blue-600 dark:text-blue-400">{value}</p>
-      </div>
-    </div>
-  );
-}
-
