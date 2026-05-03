@@ -189,6 +189,18 @@ const AnalysisMobileView = ({
     };
 
     useEffect(() => {
+        if (!(window as any).YT) {
+            const tag = document.createElement('script');
+            tag.src = "https://www.youtube.com/iframe_api";
+            tag.id = "youtube-iframe-api-mobile";
+            const firstScriptTag = document.getElementsByTagName('script')[0];
+            if (firstScriptTag && firstScriptTag.parentNode) {
+                firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+            } else {
+                document.head.appendChild(tag);
+            }
+        }
+
         const initPlayer = () => {
             const rawVideoId = match.youtube_video_id;
             if (!rawVideoId) return;
