@@ -642,10 +642,8 @@ function CockpitAnalysisContent() {
             }).eq('id', sanitizedId);
 
             await fetchData(false);
-            alert(`${setNum}세트 점수가 시간순으로 재배치 및 재계산되었습니다.`);
         } catch (err) {
             console.error("Score recalculation failed:", err);
-            alert("점수 재계산 중 오류가 발생했습니다.");
         }
     };
 
@@ -779,6 +777,16 @@ function CockpitAnalysisContent() {
         const newLoops = { ...rallyLoops, [logId]: { ...current, [side]: Math.floor(time) } };
         setRallyLoops(newLoops);
         await saveHybridMeta({ rallyLoopsV2: newLoops });
+        
+        try {
+            await supabase.from('bd_point_logs').update({ video_timestamp: Math.floor(time) }).eq('id', logId);
+            const log = logs.find(l => l.id === logId);
+            if (log) {
+                await recalculateScores(log.set_number);
+            }
+        } catch (e) {
+            console.error("Time sync failed:", e);
+        }
     };
 
     const toggleIndex = (id: string) => {
