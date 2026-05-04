@@ -491,11 +491,15 @@ function CockpitAnalysisContent() {
         hasTrackedViewRef.current = true;
         
         const updateViewCount = async () => {
-            const currentMeta = parseHybridNotes(match.feedback_notes);
+            // Fetch fresh data for the most accurate update
+            const { data: freshMatch } = await supabase.from('bd_matches').select('feedback_notes').eq('id', matchId).single();
+            if (!freshMatch) return;
+
+            const currentMeta = parseHybridNotes(freshMatch.feedback_notes);
             const stats = currentMeta.stats || { view_count: 0, view_duration: 0 };
             stats.view_count += 1;
             
-            let newRaw = match.feedback_notes || "";
+            let newRaw = freshMatch.feedback_notes || "";
             const jsonMatch = newRaw.match(/\{.*\}/s);
             if (jsonMatch) newRaw = newRaw.replace(jsonMatch[0], JSON.stringify({ ...currentMeta, stats }));
             else newRaw = (newRaw ? newRaw + "\n\n" : "") + JSON.stringify({ ...currentMeta, stats });
@@ -521,7 +525,7 @@ function CockpitAnalysisContent() {
         }, 10000);
 
         return () => clearInterval(durationTimer);
-    }, [matchId, match]);
+    }, [matchId, match !== null]); // Run when match becomes non-null
 
     // AUTO SCROLL TO BOTTOM ON LOG CHANGE
     useEffect(() => {
@@ -970,9 +974,9 @@ function CockpitAnalysisContent() {
                 </div>
 
                 <div className="flex items-center gap-6">
-                    <div className="flex bg-black/40 p-0.5 rounded-xl border border-white/10 shadow-inner">
+                    <div className="flex bg-black/40 p-1 rounded-xl border border-white/10 shadow-inner">
                         {[1, 2, 3].map(s => (
-                            <button key={s} onClick={() => { setCurrentSet(s); setIsSequentialRally(false); }} className={cn("px-6 h-7 text-[10px] font-black transition-all rounded-lg", currentSet === s ? "text-cyan-400 bg-cyan-400/20 border border-cyan-400/30 shadow-sm" : "text-white/30 hover:text-white")}>{s}세트</button>
+                            <button key={s} onClick={() => { setCurrentSet(s); setIsSequentialRally(false); }} className={cn("px-8 h-10 text-xs font-black transition-all rounded-lg", currentSet === s ? "text-cyan-400 bg-cyan-400/20 border border-cyan-400/30 shadow-sm" : "text-white/30 hover:text-white")}>{s}세트</button>
                         ))}
                     </div>
                     {totalLoopTime > 0 && (
@@ -1032,18 +1036,18 @@ function CockpitAnalysisContent() {
                             </button>
                         </div>
                         
-                        <div className="flex items-center gap-1.5 bg-black/40 p-1.5 pr-2 rounded-[1.2rem] border border-white/5 overflow-x-auto custom-scrollbar-hidden">
-                            <button onClick={() => batchSelect('all')} className="px-4 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-yellow-400 hover:text-black transition-all flex items-center gap-1.5 text-[10px] font-black shrink-0"><CheckSquare className="w-3.5 h-3.5" /> 전체</button>
-                            <button onClick={() => batchSelect('none')} className="px-4 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-rose-500 transition-all flex items-center gap-1.5 text-[10px] font-black shrink-0"><Square className="w-3.5 h-3.5" /> 해제</button>
-                            <button onClick={() => batchSelect('wins')} className="px-4 py-1.5 rounded-lg bg-blue-600/20 border border-blue-400/30 hover:bg-blue-600 transition-all flex items-center gap-1.5 text-[10px] font-black shrink-0 text-blue-400 hover:text-white"><Target className="w-3.5 h-3.5" /> 득점</button>
-                            <button onClick={() => batchSelect('losses')} className="px-4 py-1.5 rounded-lg bg-rose-600/20 border border-rose-400/30 hover:bg-rose-500 transition-all flex items-center gap-1.5 text-[10px] font-black shrink-0 text-rose-400 hover:text-white"><X className="w-3.5 h-3.5" /> 실점</button>
+                        <div className="flex items-center gap-2 bg-black/40 p-2 pr-6 rounded-[1.2rem] border border-white/5 overflow-x-auto custom-scrollbar-hidden">
+                            <button onClick={() => batchSelect('all')} className="px-5 py-2.5 rounded-lg bg-white/5 border border-white/10 hover:bg-yellow-400 hover:text-black transition-all flex items-center gap-1.5 text-xs font-black shrink-0"><CheckSquare className="w-4 h-4" /> 전체</button>
+                            <button onClick={() => batchSelect('none')} className="px-5 py-2.5 rounded-lg bg-white/5 border border-white/10 hover:bg-rose-500 transition-all flex items-center gap-1.5 text-xs font-black shrink-0"><Square className="w-4 h-4" /> 해제</button>
+                            <button onClick={() => batchSelect('wins')} className="px-5 py-2.5 rounded-lg bg-blue-600/20 border border-blue-400/30 hover:bg-blue-600 transition-all flex items-center gap-1.5 text-xs font-black shrink-0 text-blue-400 hover:text-white"><Target className="w-4 h-4" /> 득점</button>
+                            <button onClick={() => batchSelect('losses')} className="px-5 py-2.5 rounded-lg bg-rose-600/20 border border-rose-400/30 hover:bg-rose-500 transition-all flex items-center gap-1.5 text-xs font-black shrink-0 text-rose-400 hover:text-white"><X className="w-4 h-4" /> 실점</button>
                             
-                            <div className="flex-1" />
+                            <div className="flex-1 min-w-[20px]" />
                             <button onClick={() => setIsIndividualLooping(!isIndividualLooping)} className={cn(
-                                "px-4 py-1.5 rounded-lg border flex items-center gap-1.5 text-[10px] font-black shrink-0 transition-all shadow-lg",
+                                "px-6 py-2.5 rounded-lg border flex items-center gap-2 text-xs font-black shrink-0 transition-all shadow-lg",
                                 isIndividualLooping ? "bg-yellow-400 border-yellow-300 text-black shadow-[0_0_20px_rgba(250,204,21,0.5)]" : "bg-white/5 border-white/10 text-white/30"
                             )}>
-                                <RotateCcw className={cn("w-3.5 h-3.5", isIndividualLooping && "animate-spin-slow")} /> 무한반복:{isIndividualLooping ? 'ON' : 'OFF'}
+                                <RotateCcw className={cn("w-4 h-4", isIndividualLooping && "animate-spin-slow")} /> 무한반복:{isIndividualLooping ? 'ON' : 'OFF'}
                             </button>
                         </div>
                     </div>
@@ -1068,12 +1072,12 @@ function CockpitAnalysisContent() {
                                             </button>
                                             <div className="flex flex-col cursor-pointer flex-1" onClick={() => startRallyLoop(l)}>
                                                 <div className="flex items-center gap-2">
-                                                    <span className={cn("text-2xl font-black tabular-nums tracking-tighter", l.is_my_point ? "text-cyan-400 drop-shadow-[0_0_10px_rgba(34,211,238,0.4)]" : "text-rose-500 drop-shadow-[0_0_10px_rgba(244,63,94,0.4)]")}>{l.current_score}</span>
-                                                    <span className="text-[13px] font-black text-white/95 uppercase truncate tracking-tight italic">{l.point_type}</span>
+                                                    <span className={cn("text-3xl font-black tabular-nums tracking-tighter", l.is_my_point ? "text-cyan-400 drop-shadow-[0_0_10px_rgba(34,211,238,0.4)]" : "text-rose-500 drop-shadow-[0_0_10px_rgba(244,63,94,0.4)]")}>{l.current_score}</span>
+                                                    <span className="text-base font-black text-white/95 uppercase truncate tracking-tight italic">{l.point_type}</span>
                                                 </div>
-                                                <div className="flex items-center gap-2 mt-1 px-3 py-0.5 bg-black/60 rounded-full w-fit border border-white/10 shadow-inner">
-                                                    <Target className="w-2.5 h-2.5 text-cyan-400/70" />
-                                                    <span className="text-[10px] font-black text-cyan-400/90 tabular-nums">@{formatTime(loop?.start || l.video_timestamp)}</span>
+                                                <div className="flex items-center gap-2 mt-1 px-4 py-1 bg-black/60 rounded-full w-fit border border-white/10 shadow-inner">
+                                                    <Target className="w-3.5 h-3.5 text-cyan-400/70" />
+                                                    <span className="text-xs font-black text-cyan-400/90 tabular-nums">@{formatTime(loop?.start || l.video_timestamp)}</span>
                                                 </div>
                                             </div>
                                         </div>

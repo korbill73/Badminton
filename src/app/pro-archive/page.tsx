@@ -22,6 +22,7 @@ export default function ProArchiveMainPage() {
     const [bdPlayers, setBdPlayers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedCategory, setSelectedCategory] = useState<'고등부' | '프로'>('고등부');
+    const hasTrackedViewRef = useRef(false);
 
     const [isMatchModalOpen, setIsMatchModalOpen] = useState(false);
     const [editingMatch, setEditingMatch] = useState<any>(null);
@@ -158,25 +159,41 @@ export default function ProArchiveMainPage() {
 
     // VIEW STATS TRACKING (PRO)
     useEffect(() => {
-        if (!studyMatch) return;
+        if (!studyMatch || hasTrackedViewRef.current) return;
         
-        // 1. Increment Count
-        const inc = async () => {
-            const meta = parseHybridNotesPro(studyMatch.summary);
+        hasTrackedViewRef.current = true;
+        
+        const updateViewCount = async () => {
+            const { data: fresh } = await supabase.from('pro_matches').select('summary').eq('id', studyMatch.id).single();
+            if (!fresh) return;
+
+            const meta = parseHybridNotesPro(fresh.summary);
             const stats = meta.stats || { view_count: 0, view_duration: 0 };
             stats.view_count += 1;
-            await saveHybridMetaPro(studyMatch.id, { stats });
+            
+            let newRaw = fresh.summary || "";
+            const jsonMatch = newRaw.match(/\{.*\}/s);
+            if (jsonMatch) newRaw = newRaw.replace(jsonMatch[0], JSON.stringify({ ...meta, stats }));
+            else newRaw = (newRaw ? newRaw + "\n\n" : "") + JSON.stringify({ ...meta, stats });
+            
+            await supabase.from('pro_matches').update({ summary: newRaw }).eq('id', studyMatch.id);
         };
-        inc();
+        updateViewCount();
 
-        // 2. Track Duration
-        const durationTimer = setInterval(() => {
-            const latestMatch = matches.find(x => x.id === studyMatch.id);
-            if (!latestMatch) return;
-            const meta = parseHybridNotesPro(latestMatch.summary);
-            const stats = meta.stats || { view_count: 0, view_duration: 0 };
-            stats.view_duration += 10;
-            saveHybridMetaPro(studyMatch.id, { stats });
+        const durationTimer = setInterval(async () => {
+            const { data: fresh } = await supabase.from('pro_matches').select('summary').eq('id', studyMatch.id).single();
+            if (fresh) {
+                const meta = parseHybridNotesPro(fresh.summary);
+                const stats = meta.stats || { view_count: 0, view_duration: 0 };
+                stats.view_duration += 10;
+                
+                let newRaw = fresh.summary || "";
+                const jsonMatch = newRaw.match(/\{.*\}/s);
+                if (jsonMatch) newRaw = newRaw.replace(jsonMatch[0], JSON.stringify({ ...meta, stats }));
+                else newRaw = (newRaw ? newRaw + "\n\n" : "") + JSON.stringify({ ...meta, stats });
+                
+                await supabase.from('pro_matches').update({ summary: newRaw }).eq('id', studyMatch.id);
+            }
         }, 10000);
 
         return () => clearInterval(durationTimer);
@@ -257,12 +274,13 @@ export default function ProArchiveMainPage() {
     };
 
     const saveHybridMetaPro = async (matchId: string, updates: any) => {
-        const m = matches.find(x => x.id === matchId);
-        if (!m) return;
-        const currentMeta = parseHybridNotesPro(m.summary);
+        const { data: fresh } = await supabase.from('pro_matches').select('summary').eq('id', matchId).single();
+        if (!fresh) return;
+        
+        const currentMeta = parseHybridNotesPro(fresh.summary);
         const newMeta = { ...currentMeta, ...updates };
         
-        let newRaw = m.summary || "";
+        let newRaw = fresh.summary || "";
         const jsonMatch = newRaw.match(/\{.*\}/s);
         if (jsonMatch) {
             newRaw = newRaw.replace(jsonMatch[0], JSON.stringify(newMeta));
@@ -271,8 +289,6 @@ export default function ProArchiveMainPage() {
         }
         
         await supabase.from('pro_matches').update({ summary: newRaw }).eq('id', matchId);
-        // fetchData() 제거 - 10초마다 전체 리스트를 갱신할 필요는 없으며, 
-        // 이는 불필요한 리렌더링을 유발하여 플레이어에 영향을 줄 수 있음
     };
 
     const performSaveNote = async (tag: string, content: string) => {
@@ -403,7 +419,7 @@ export default function ProArchiveMainPage() {
                     
                     <div className="space-y-3 md:space-y-4">
                         {filteredMatches.map((m: any) => (
-                            <div key={m.id} onClick={() => { setStudyMatch(m); fetchNotes(m.id); }} className="group relative bg-[#111827] rounded-2xl md:rounded-[3.2rem] p-4 md:px-10 md:py-7 transition-all duration-500 flex flex-col md:flex-row items-center border border-white/10 hover:border-blue-500 shadow-inner hover:scale-[1.012] cursor-pointer gap-4 md:gap-0">
+                            <div key={m.id} onClick={() => { setStudyMatch(m); fetchNotes(m.id); hasTrackedViewRef.current = false; }} className="group relative bg-[#111827] rounded-2xl md:rounded-[3.2rem] p-4 md:px-10 md:py-7 transition-all duration-500 flex flex-col md:flex-row items-center border border-white/10 hover:border-blue-500 shadow-inner hover:scale-[1.012] cursor-pointer gap-4 md:gap-0">
                                 {/* Desktop Layout */}
                                 <div className="hidden md:flex w-[410px] shrink-0 border-r border-white/10 pr-8 items-center gap-5">
                                     <span className="flex items-center gap-2 text-sky-400 font-black text-xl"><Calendar className="w-4 h-4" /> {m.date}</span>
@@ -417,12 +433,12 @@ export default function ProArchiveMainPage() {
                                         <span className="flex-1 text-left font-black text-[24px] text-yellow-400 truncate max-w-[300px]">{m.opponent}{m.opponent_2_name && `/ ${m.opponent_2_name}`}</span>
                                     </div>
                                 </div>
-                                <div className="hidden md:flex flex-col items-center justify-center min-w-[150px] px-8 border-l border-white/10 opacity-60 group-hover:opacity-100 transition-opacity shrink-0">
-                                    <div className="flex items-center gap-2 text-[13px] font-black text-sky-400 uppercase tracking-widest whitespace-nowrap">
-                                        <Eye className="w-4 h-4" /> {parseStats(m.summary || '').view_count} VIEWS
+                                <div className="hidden md:flex flex-col items-center justify-center min-w-[180px] px-8 border-l border-white/10 opacity-60 group-hover:opacity-100 transition-opacity shrink-0">
+                                    <div className="flex items-center gap-2 text-sm font-black text-sky-400 uppercase tracking-widest whitespace-nowrap">
+                                        <Eye className="w-4 h-4" /> {parseStats(m.summary || '').view_count}회 시청
                                     </div>
-                                    <div className="flex items-center gap-2 text-[13px] font-black text-amber-400 uppercase tracking-widest whitespace-nowrap mt-1">
-                                        <Clock className="w-4 h-4" /> {Math.floor(parseStats(m.summary || '').view_duration / 60)} MINS
+                                    <div className="flex items-center gap-2 text-sm font-black text-amber-400 uppercase tracking-widest whitespace-nowrap mt-1">
+                                        <Clock className="w-4 h-4" /> {Math.floor(parseStats(m.summary || '').view_duration / 60)}분 경과
                                     </div>
                                 </div>
                                     <div className="hidden md:flex w-[410px] shrink-0 items-center justify-end border-l border-white/10 pl-8 gap-6">
@@ -621,8 +637,8 @@ export default function ProArchiveMainPage() {
                                                             note.tag === customTags[2] ? 'bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.6)]' : 'bg-slate-400 shadow-[0_0_8px_rgba(148,163,184,0.4)]'
                                                         )} />
                                                         <div className="flex items-center gap-2 flex-1 min-w-0">
-                                                            <p className={cn("font-black text-sm tracking-tight truncate", isCurrentlyPlaying ? "text-white" : "text-white/90")}>{note.content}</p>
-                                                            <span className={cn("font-black text-[10px] tracking-widest px-1.5 py-0.5 rounded shrink-0", 
+                                                            <p className={cn("font-black text-base tracking-tight truncate", isCurrentlyPlaying ? "text-white" : "text-white/90")}>{note.content}</p>
+                                                            <span className={cn("font-black text-xs tracking-widest px-2 py-0.5 rounded shrink-0", 
                                                                 note.tag === '득점' ? 'bg-rose-500/20 text-rose-300' : 
                                                                 note.tag === '실점' ? 'bg-blue-500/20 text-blue-300' : 
                                                                 'bg-slate-500/20 text-slate-300'

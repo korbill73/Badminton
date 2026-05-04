@@ -42,6 +42,7 @@ export default function Dashboard() {
     });
     const [allLogs, setAllLogs] = useState<any[]>([]);
     const [allMatches, setAllMatches] = useState<any[]>([]);
+    const [allProMatches, setAllProMatches] = useState<any[]>([]);
 
     const initialWin = [
         { group: '스매시', items: ['직선 스매시', '대각 스매시', '반 스매시'] }, 
@@ -61,8 +62,10 @@ export default function Dashboard() {
             setLoading(true);
             try {
                 const { data: matches } = await supabase.from('bd_matches').select('*');
+                const { data: proMatches } = await supabase.from('pro_matches').select('*');
                 const { data: pointLogs } = await supabase.from('bd_point_logs').select('*');
                 setAllMatches(matches || []);
+                setAllProMatches(proMatches || []);
                 setAllLogs(pointLogs || []);
             } finally {
                 setLoading(false);
@@ -83,10 +86,7 @@ export default function Dashboard() {
     }, [allLogs, filteredMatches]);
 
     // Recalculate stats for filtered view
-    const currentStats = useMemo(() => {
-        let w = 0, l = 0, totalP = 0, totalO = 0;
-        let tViews = 0, tDuration = 0;
-
+    const statsDivision = useMemo(() => {
         const parseStats = (raw: string) => {
             if (!raw) return { view_count: 0, view_duration: 0 };
             try {
@@ -99,6 +99,32 @@ export default function Dashboard() {
             return { view_count: 0, view_duration: 0 };
         };
 
+        const calc = (matchList: any[], isPro = false) => {
+            let views = 0, duration = 0;
+            matchList.forEach(m => {
+                const s = parseStats(isPro ? m.summary : m.summary || '');
+                views += s.view_count || 0;
+                duration += s.view_duration || 0;
+            });
+            return { views, duration, count: matchList.length };
+        };
+
+        const matchStats = calc(filteredMatches);
+        const highSchoolStats = calc(allProMatches.filter(m => (m.category || '고등부') === '고등부'), true);
+        const proStats = calc(allProMatches.filter(m => m.category === '프로'), true);
+
+        return {
+            matchStats,
+            highSchoolStats,
+            proStats,
+            totalViews: matchStats.views + highSchoolStats.views + proStats.views,
+            totalDuration: matchStats.duration + highSchoolStats.duration + proStats.duration
+        };
+    }, [filteredMatches, allProMatches]);
+
+    const currentStats = useMemo(() => {
+        let w = 0, l = 0, totalP = 0, totalO = 0;
+
         filteredMatches.forEach(m => {
             const p1 = Number(m.set_1_score_player || 0), o1 = Number(m.set_1_score_opponent || 0);
             const p2 = Number(m.set_2_score_player || 0), o2 = Number(m.set_2_score_opponent || 0);
@@ -107,19 +133,13 @@ export default function Dashboard() {
             totalO += (o1 + o2 + o3);
             const s1 = p1 > o1 ? 1 : 0, s2 = p2 > o2 ? 1 : 0, s3 = p3 > o3 ? 1 : 0;
             if ((s1 + s2 + s3) >= 2) w++; else l++;
-
-            const s = parseStats(m.summary || '');
-            tViews += s.view_count || 0;
-            tDuration += s.view_duration || 0;
         });
         return {
             totalMatches: filteredMatches.length,
             winRate: filteredMatches.length ? Math.round((w / filteredMatches.length) * 100) : 0,
             totalPoints: totalP,
             opponentPoints: totalO,
-            winLoss: { w, l },
-            totalViews: tViews,
-            totalDuration: tDuration
+            winLoss: { w, l }
         };
     }, [filteredMatches]);
 
@@ -253,41 +273,87 @@ export default function Dashboard() {
                     </div>
                 </div>
 
-                {/* KPI STATS */}
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 md:gap-8">
-                    <div className="bg-[#0b1221] p-6 md:p-10 rounded-3xl md:rounded-[2.5rem] border border-white/5 group hover:border-yellow-500/30 transition-all flex flex-col justify-between h-40 md:h-56 shadow-xl">
-                        <Trophy className="w-8 h-8 md:w-12 md:h-12 text-yellow-500 drop-shadow-[0_0_10px_rgba(234,179,8,0.3)]" />
-                        <div>
-                            <p className="text-slate-500 font-black text-[8px] md:text-[10px] uppercase tracking-widest mb-1">Total Victories</p>
-                            <h3 className="text-2xl md:text-5xl font-black text-white tracking-tighter">{currentStats.winLoss.w}<span className="text-[10px] md:text-sm text-slate-700 ml-2 font-bold italic">GAMES</span></h3>
+                {/* KPI STATS - DIVIDED BY CATEGORY */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
+                    {/* Overall Summary */}
+                    <div className="md:col-span-3 bg-gradient-to-br from-blue-900/40 to-indigo-900/40 p-8 md:p-12 rounded-[2.5rem] border border-blue-500/30 shadow-2xl flex flex-col md:flex-row items-center justify-around gap-8">
+                        <div className="text-center md:text-left">
+                            <p className="text-blue-300 font-black text-sm md:text-lg uppercase tracking-[0.3em] mb-3 italic">Total Combined Performance</p>
+                            <h2 className="text-4xl md:text-7xl font-black text-white tracking-tighter">전체 통합 데이터 분석 리포트</h2>
+                        </div>
+                        <div className="flex gap-12 md:gap-20">
+                            <div className="text-center">
+                                <p className="text-slate-400 font-bold text-xs md:text-sm uppercase mb-2">누적 총 조회수</p>
+                                <span className="text-3xl md:text-6xl font-black text-blue-400 tabular-nums">{statsDivision.totalViews.toLocaleString()}<span className="text-sm md:text-xl text-slate-600 ml-2 italic">회</span></span>
+                            </div>
+                            <div className="text-center">
+                                <p className="text-slate-400 font-bold text-xs md:text-sm uppercase mb-2">누적 총 시청시간</p>
+                                <span className="text-3xl md:text-6xl font-black text-amber-400 tabular-nums">{Math.floor(statsDivision.totalDuration / 60).toLocaleString()}<span className="text-sm md:text-xl text-slate-600 ml-2 italic">분</span></span>
+                            </div>
                         </div>
                     </div>
-                    <div className="bg-[#0b1221] p-6 md:p-10 rounded-3xl md:rounded-[2.5rem] border border-white/5 group hover:border-rose-500/30 transition-all flex flex-col justify-between h-40 md:h-56 shadow-xl">
-                        <TrendingUp className="w-8 h-8 md:w-12 md:h-12 text-rose-500 drop-shadow-[0_0_10px_rgba(244,63,94,0.3)]" />
-                        <div>
-                            <p className="text-slate-500 font-black text-[8px] md:text-[10px] uppercase tracking-widest mb-1">Win Rate</p>
-                            <h3 className="text-2xl md:text-5xl font-black text-white tracking-tighter">{currentStats.winRate}<span className="text-[10px] md:text-sm text-slate-700 ml-2 font-bold italic">%</span></h3>
+
+                    {/* Divided Stats */}
+                    <div className="bg-[#0b1221] p-8 md:p-10 rounded-[2.5rem] border border-white/5 hover:border-blue-500/40 transition-all shadow-xl group">
+                        <div className="flex items-center gap-4 mb-6">
+                            <div className="p-3 bg-blue-600/10 rounded-xl border border-blue-500/20"><Trophy className="w-6 h-6 text-blue-500" /></div>
+                            <h4 className="text-xl md:text-2xl font-black text-white italic tracking-tight">경기 기록 영상</h4>
+                        </div>
+                        <div className="space-y-6">
+                            <div className="flex justify-between items-end border-b border-white/5 pb-4">
+                                <span className="text-slate-500 font-bold text-sm">등록 경기수</span>
+                                <span className="text-2xl font-black text-white">{statsDivision.matchStats.count}<span className="text-xs text-slate-600 ml-1">게임</span></span>
+                            </div>
+                            <div className="flex justify-between items-end border-b border-white/5 pb-4">
+                                <span className="text-slate-500 font-bold text-sm">누적 조회수</span>
+                                <span className="text-2xl font-black text-blue-400">{statsDivision.matchStats.views.toLocaleString()}<span className="text-xs text-slate-600 ml-1">회</span></span>
+                            </div>
+                            <div className="flex justify-between items-end border-b border-white/5 pb-4">
+                                <span className="text-slate-500 font-bold text-sm">누적 시청시간</span>
+                                <span className="text-2xl font-black text-amber-400">{Math.floor(statsDivision.matchStats.duration / 60).toLocaleString()}<span className="text-xs text-slate-600 ml-1">분</span></span>
+                            </div>
                         </div>
                     </div>
-                    <div className="bg-[#0b1221] p-6 md:p-10 rounded-3xl md:rounded-[2.5rem] border border-white/5 group hover:border-emerald-500/30 transition-all flex flex-col justify-between h-40 md:h-56 shadow-xl">
-                        <BarChart3 className="w-8 h-8 md:w-12 md:h-12 text-emerald-500 drop-shadow-[0_0_10px_rgba(16,185,129,0.3)]" />
-                        <div>
-                            <p className="text-slate-500 font-black text-[8px] md:text-[10px] uppercase tracking-widest mb-1">Analyzed Logs</p>
-                            <h3 className="text-2xl md:text-5xl font-black text-white tracking-tighter">{filteredLogs.length.toLocaleString()}<span className="text-[10px] md:text-sm text-slate-700 ml-2 font-bold italic">PTS</span></h3>
+
+                    <div className="bg-[#0b1221] p-8 md:p-10 rounded-[2.5rem] border border-white/5 hover:border-emerald-500/40 transition-all shadow-xl group">
+                        <div className="flex items-center gap-4 mb-6">
+                            <div className="p-3 bg-emerald-600/10 rounded-xl border border-emerald-500/20"><Zap className="w-6 h-6 text-emerald-500" /></div>
+                            <h4 className="text-xl md:text-2xl font-black text-white italic tracking-tight">프로 분석실 (고등부)</h4>
+                        </div>
+                        <div className="space-y-6">
+                            <div className="flex justify-between items-end border-b border-white/5 pb-4">
+                                <span className="text-slate-500 font-bold text-sm">분석 영상수</span>
+                                <span className="text-2xl font-black text-white">{statsDivision.highSchoolStats.count}<span className="text-xs text-slate-600 ml-1">개</span></span>
+                            </div>
+                            <div className="flex justify-between items-end border-b border-white/5 pb-4">
+                                <span className="text-slate-500 font-bold text-sm">누적 조회수</span>
+                                <span className="text-2xl font-black text-blue-400">{statsDivision.highSchoolStats.views.toLocaleString()}<span className="text-xs text-slate-600 ml-1">회</span></span>
+                            </div>
+                            <div className="flex justify-between items-end border-b border-white/5 pb-4">
+                                <span className="text-slate-500 font-bold text-sm">누적 시청시간</span>
+                                <span className="text-2xl font-black text-amber-400">{Math.floor(statsDivision.highSchoolStats.duration / 60).toLocaleString()}<span className="text-xs text-slate-600 ml-1">분</span></span>
+                            </div>
                         </div>
                     </div>
-                    <div className="bg-[#0b1221] p-6 md:p-10 rounded-3xl md:rounded-[2.5rem] border border-white/5 group hover:border-sky-500/30 transition-all flex flex-col justify-between h-40 md:h-56 shadow-xl">
-                        <Zap className="w-8 h-8 md:w-12 md:h-12 text-sky-500 drop-shadow-[0_0_10px_rgba(14,165,233,0.3)]" />
-                        <div>
-                            <p className="text-slate-500 font-black text-[8px] md:text-[10px] uppercase tracking-widest mb-1">Total Views</p>
-                            <h3 className="text-2xl md:text-5xl font-black text-white tracking-tighter">{currentStats.totalViews.toLocaleString()}<span className="text-[10px] md:text-sm text-slate-700 ml-2 font-bold italic">VIEWS</span></h3>
+
+                    <div className="bg-[#0b1221] p-8 md:p-10 rounded-[2.5rem] border border-white/5 hover:border-purple-500/40 transition-all shadow-xl group">
+                        <div className="flex items-center gap-4 mb-6">
+                            <div className="p-3 bg-purple-600/10 rounded-xl border border-purple-500/20"><Target className="w-6 h-6 text-purple-500" /></div>
+                            <h4 className="text-xl md:text-2xl font-black text-white italic tracking-tight">프로 분석실 (프로)</h4>
                         </div>
-                    </div>
-                    <div className="bg-[#0b1221] p-6 md:p-10 rounded-3xl md:rounded-[2.5rem] border border-white/5 group hover:border-amber-500/30 transition-all flex flex-col justify-between h-40 md:h-56 shadow-xl col-span-2 md:col-span-1">
-                        <Activity className="w-8 h-8 md:w-12 md:h-12 text-amber-500 drop-shadow-[0_0_10px_rgba(245,158,11,0.3)]" />
-                        <div>
-                            <p className="text-slate-500 font-black text-[8px] md:text-[10px] uppercase tracking-widest mb-1">Play Time</p>
-                            <h3 className="text-2xl md:text-5xl font-black text-white tracking-tighter">{Math.floor(currentStats.totalDuration / 60)}<span className="text-[10px] md:text-sm text-slate-700 ml-2 font-bold italic">MINS</span></h3>
+                        <div className="space-y-6">
+                            <div className="flex justify-between items-end border-b border-white/5 pb-4">
+                                <span className="text-slate-500 font-bold text-sm">분석 영상수</span>
+                                <span className="text-2xl font-black text-white">{statsDivision.proStats.count}<span className="text-xs text-slate-600 ml-1">개</span></span>
+                            </div>
+                            <div className="flex justify-between items-end border-b border-white/5 pb-4">
+                                <span className="text-slate-500 font-bold text-sm">누적 조회수</span>
+                                <span className="text-2xl font-black text-blue-400">{statsDivision.proStats.views.toLocaleString()}<span className="text-xs text-slate-600 ml-1">회</span></span>
+                            </div>
+                            <div className="flex justify-between items-end border-b border-white/5 pb-4">
+                                <span className="text-slate-500 font-bold text-sm">누적 시청시간</span>
+                                <span className="text-2xl font-black text-amber-400">{Math.floor(statsDivision.proStats.duration / 60).toLocaleString()}<span className="text-xs text-slate-600 ml-1">분</span></span>
+                            </div>
                         </div>
                     </div>
                 </div>
