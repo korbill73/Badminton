@@ -122,18 +122,19 @@ export default function ProArchiveMainPage() {
 
     const incrementProMatchView = async (matchId: string, currentSummary: string) => {
         try {
+            const safeSummary = currentSummary || "";
             let fullMeta: any = {};
             try {
-                const jsonMatch = currentSummary.match(/\{.*\}/s);
+                const jsonMatch = safeSummary.match(/\{.*\}/s);
                 if (jsonMatch) fullMeta = JSON.parse(jsonMatch[0]);
-                else if (currentSummary.trim().startsWith('{')) fullMeta = JSON.parse(currentSummary);
+                else if (safeSummary.trim().startsWith('{')) fullMeta = JSON.parse(safeSummary);
             } catch (e) {}
 
             if (!fullMeta.stats) fullMeta.stats = { view_count: 0, view_duration: 0 };
             fullMeta.stats.view_count += 1;
 
-            const updatedSummary = currentSummary.includes('{') 
-                ? currentSummary.replace(/\{.*\}/s, JSON.stringify(fullMeta))
+            const updatedSummary = safeSummary.includes('{') 
+                ? safeSummary.replace(/\{.*\}/s, JSON.stringify(fullMeta))
                 : JSON.stringify(fullMeta);
 
             await supabase.from('pro_matches').update({ summary: updatedSummary }).eq('id', matchId);

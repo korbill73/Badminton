@@ -153,18 +153,19 @@ export default function AnalysisArchivePage() {
 
     const incrementMatchView = async (matchId: string, currentNotes: string) => {
         try {
+            const safeNotes = currentNotes || "";
             let fullMeta: any = {};
             try {
-                const jsonMatch = (currentNotes || '').match(/\{.*\}/s);
+                const jsonMatch = safeNotes.match(/\{.*\}/s);
                 if (jsonMatch) fullMeta = JSON.parse(jsonMatch[0]);
-                else if ((currentNotes || '').trim().startsWith('{')) fullMeta = JSON.parse(currentNotes);
+                else if (safeNotes.trim().startsWith('{')) fullMeta = JSON.parse(safeNotes);
             } catch (e) {}
 
             if (!fullMeta.stats) fullMeta.stats = { view_count: 0, view_duration: 0 };
             fullMeta.stats.view_count += 1;
 
-            const updatedNotes = (currentNotes || '').includes('{') 
-                ? currentNotes.replace(/\{.*\}/s, JSON.stringify(fullMeta))
+            const updatedNotes = safeNotes.includes('{') 
+                ? safeNotes.replace(/\{.*\}/s, JSON.stringify(fullMeta))
                 : JSON.stringify(fullMeta);
 
             await supabase.from('bd_matches').update({ feedback_notes: updatedNotes }).eq('id', matchId);
