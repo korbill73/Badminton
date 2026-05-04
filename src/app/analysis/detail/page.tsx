@@ -301,6 +301,16 @@ const AnalysisMobileView = ({
                 <div className="portrait:absolute portrait:top-2 portrait:left-1/2 portrait:-translate-x-1/2 portrait:w-12 portrait:h-1 portrait:bg-white/10 portrait:rounded-full" />
                 
                 <div className="flex-1 flex flex-col gap-2.5 landscape:gap-1.5 portrait:mt-2">
+                    {/* Landscape Top Actions */}
+                    <div className="hidden landscape:flex items-center justify-between mb-1 px-1">
+                        <button onClick={onClose} className="p-2 bg-rose-600/20 text-rose-500 rounded-lg border border-rose-500/30 active:scale-90 transition-all">
+                            <X className="w-4 h-4" />
+                        </button>
+                        <button onClick={toggleFullScreen} className="p-2 bg-blue-600/20 text-blue-400 rounded-lg border border-blue-500/30 active:scale-90 transition-all">
+                            <Maximize2 className="w-4 h-4" />
+                        </button>
+                    </div>
+
                     <div className="grid grid-cols-3 gap-2 landscape:gap-1 w-full border-b border-white/5 pb-2.5">
                         {[1, 2, 3].map(s => (
                             <button 
