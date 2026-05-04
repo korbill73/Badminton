@@ -401,6 +401,7 @@ function CockpitAnalysisContent() {
     const [editingLog, setEditingLog] = useState<{ id: string, type: string, is_my_point: boolean, set_number: number } | null>(null);
     const [isPlayerReady, setIsPlayerReady] = useState(false);
     const [hasAutoStarted, setHasAutoStarted] = useState(false);
+    const hasTrackedViewRef = useRef(false);
 
     useEffect(() => {
         const checkMobile = () => {
@@ -485,31 +486,42 @@ function CockpitAnalysisContent() {
 
     // VIEW STATS TRACKING
     useEffect(() => {
-        if (!matchId || !match) return;
+        if (!matchId || !match || hasTrackedViewRef.current) return;
         
-        // 1. Increment View Count (Once per session)
-        const updateStats = async () => {
+        hasTrackedViewRef.current = true;
+        
+        const updateViewCount = async () => {
             const currentMeta = parseHybridNotes(match.feedback_notes);
             const stats = currentMeta.stats || { view_count: 0, view_duration: 0 };
             stats.view_count += 1;
-            await saveHybridMeta({ stats }, false);
+            
+            let newRaw = match.feedback_notes || "";
+            const jsonMatch = newRaw.match(/\{.*\}/s);
+            if (jsonMatch) newRaw = newRaw.replace(jsonMatch[0], JSON.stringify({ ...currentMeta, stats }));
+            else newRaw = (newRaw ? newRaw + "\n\n" : "") + JSON.stringify({ ...currentMeta, stats });
+            
+            await supabase.from('bd_matches').update({ feedback_notes: newRaw }).eq('id', matchId);
         };
-        updateStats();
+        updateViewCount();
 
-        // 2. Track Duration
-        let secondsSpent = 0;
-        const durationTimer = setInterval(() => {
-            secondsSpent += 10;
-            saveHybridMeta({ 
-                stats: { 
-                    ...(parseHybridNotes(match.feedback_notes).stats || { view_count: 0, view_duration: 0 }),
-                    view_duration: (parseHybridNotes(match.feedback_notes).stats?.view_duration || 0) + 10
-                }
-            }, false);
+        const durationTimer = setInterval(async () => {
+            const { data: latestMatch } = await supabase.from('bd_matches').select('feedback_notes').eq('id', matchId).single();
+            if (latestMatch) {
+                const currentMeta = parseHybridNotes(latestMatch.feedback_notes);
+                const stats = currentMeta.stats || { view_count: 0, view_duration: 0 };
+                stats.view_duration += 10;
+                
+                let newRaw = latestMatch.feedback_notes || "";
+                const jsonMatch = newRaw.match(/\{.*\}/s);
+                if (jsonMatch) newRaw = newRaw.replace(jsonMatch[0], JSON.stringify({ ...currentMeta, stats }));
+                else newRaw = (newRaw ? newRaw + "\n\n" : "") + JSON.stringify({ ...currentMeta, stats });
+                
+                await supabase.from('bd_matches').update({ feedback_notes: newRaw }).eq('id', matchId);
+            }
         }, 10000);
 
         return () => clearInterval(durationTimer);
-    }, [matchId]); // Only run when matchId changes (initial mount for that match)
+    }, [matchId, match]);
 
     // AUTO SCROLL TO BOTTOM ON LOG CHANGE
     useEffect(() => {
@@ -563,11 +575,16 @@ function CockpitAnalysisContent() {
     }, [activeLoop, isSequentialRally, sequentialRallyIndex, logs, rallyLoops, currentSet, selectedIndices, isIndividualLooping]);
 
     const saveHybridMeta = async (updates: any, refresh = true) => {
-        if (!matchId || !match) return;
-        const currentMeta = parseHybridNotes(match.feedback_notes);
+        if (!matchId) return;
+        
+        // Fetch latest to prevent overwriting other concurrent updates (like duration tracking)
+        const { data: latestMatch } = await supabase.from('bd_matches').select('feedback_notes').eq('id', matchId).single();
+        if (!latestMatch) return;
+        
+        const currentMeta = parseHybridNotes(latestMatch.feedback_notes);
         const newMeta = { ...currentMeta, ...updates };
         
-        let newRaw = match.feedback_notes || "";
+        let newRaw = latestMatch.feedback_notes || "";
         const jsonMatch = newRaw.match(/\{.*\}/s);
         if (jsonMatch) {
             newRaw = newRaw.replace(jsonMatch[0], JSON.stringify(newMeta));
@@ -811,14 +828,24 @@ function CockpitAnalysisContent() {
     };
 
     const startRallyLoop = (log: any, sequential: boolean = false) => {
+        if (!log) return;
         const bounds = rallyLoops[log.id];
         const start = bounds?.start || log.video_timestamp;
         const end = bounds?.end || 0;
-        if (!end) { playerRef.current?.seekTo(start); return; }
+        
+        if (!end) { 
+            if (playerRef.current && typeof playerRef.current.seekTo === 'function') playerRef.current.seekTo(start); 
+            return; 
+        }
         if (!sequential && activeLoop && activeLoop.id === log.id) { setActiveLoop(null); setIsSequentialRally(false); return; }
+        
         setActiveLoop({ id: log.id, start, end });
-        playerRef.current?.seekTo(start);
-        playerRef.current?.playVideo();
+        if (playerRef.current && typeof playerRef.current.seekTo === 'function') {
+            try {
+                playerRef.current.seekTo(start);
+                playerRef.current.playVideo();
+            } catch (e) { console.warn("Player not fully ready", e); }
+        }
     };
 
     const startSelectedSequential = () => {
@@ -840,14 +867,16 @@ function CockpitAnalysisContent() {
             });
             
             setSelectedIndices(next);
+            setHasAutoStarted(true);
             
             if (hasWins) {
                 const activeRallies = currentSetLogs.filter(l => l.is_my_point && rallyLoops[l.id]?.end);
                 setIsSequentialRally(true);
                 setSequentialRallyIndex(0);
-                startRallyLoop(activeRallies[0], true);
+                setTimeout(() => {
+                    startRallyLoop(activeRallies[0], true);
+                }, 500);
             }
-            setHasAutoStarted(true);
         }
     }, [isPlayerReady, logs, hasAutoStarted, currentSet, rallyLoops]);
 
