@@ -399,6 +399,8 @@ function CockpitAnalysisContent() {
     const [isCatModalOpen, setIsCatModalOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
     const [editingLog, setEditingLog] = useState<{ id: string, type: string, is_my_point: boolean, set_number: number } | null>(null);
+    const [isPlayerReady, setIsPlayerReady] = useState(false);
+    const [hasAutoStarted, setHasAutoStarted] = useState(false);
 
     useEffect(() => {
         const checkMobile = () => {
@@ -825,6 +827,30 @@ function CockpitAnalysisContent() {
         setIsSequentialRally(true); setSequentialRallyIndex(0); startRallyLoop(activeRallies[0], true);
     };
 
+    // AUTO START WINS ON INITIAL LOAD
+    useEffect(() => {
+        if (!hasAutoStarted && isPlayerReady && logs.length > 0) {
+            let hasWins = false;
+            const next = { ...selectedIndices };
+            const currentSetLogs = logs.filter(l => Number(l.set_number) === Number(currentSet));
+            
+            currentSetLogs.forEach(l => {
+                next[l.id] = l.is_my_point;
+                if (l.is_my_point && rallyLoops[l.id]?.end) hasWins = true;
+            });
+            
+            setSelectedIndices(next);
+            
+            if (hasWins) {
+                const activeRallies = currentSetLogs.filter(l => l.is_my_point && rallyLoops[l.id]?.end);
+                setIsSequentialRally(true);
+                setSequentialRallyIndex(0);
+                startRallyLoop(activeRallies[0], true);
+            }
+            setHasAutoStarted(true);
+        }
+    }, [isPlayerReady, logs, hasAutoStarted, currentSet, rallyLoops]);
+
     const cSetLogs = useMemo(() => {
         const filtered = logs.filter(l => Number(l.set_number) === Number(currentSet));
         return [...filtered].sort((a,b) => {
@@ -947,7 +973,7 @@ function CockpitAnalysisContent() {
 
                 <div className="flex flex-col flex-1 overflow-hidden gap-1.5 h-full">
                     <div className="w-full aspect-video bg-black rounded-[2rem] overflow-hidden border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)] shrink-0">
-                        <YoutubePlayer videoId={match?.youtube_video_id || ''} onPlayerReady={(p) => { playerRef.current = p; }} />
+                        <YoutubePlayer videoId={match?.youtube_video_id || ''} onPlayerReady={(p) => { playerRef.current = p; setIsPlayerReady(true); }} />
                     </div>
                     <div className="flex-1 bg-black/30 border border-white/5 rounded-[2rem] p-3 overflow-hidden flex flex-col shadow-inner">
                         <div className="grid grid-cols-3 gap-3 h-full overflow-hidden">
@@ -977,18 +1003,18 @@ function CockpitAnalysisContent() {
                             </button>
                         </div>
                         
-                        <div className="flex items-center gap-1.5 bg-black/40 p-1.5 rounded-[1.2rem] border border-white/5 overflow-x-auto custom-scrollbar-hidden">
+                        <div className="flex items-center gap-1.5 bg-black/40 p-1.5 pr-2 rounded-[1.2rem] border border-white/5 overflow-x-auto custom-scrollbar-hidden">
                             <button onClick={() => batchSelect('all')} className="px-4 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-yellow-400 hover:text-black transition-all flex items-center gap-1.5 text-[10px] font-black shrink-0"><CheckSquare className="w-3.5 h-3.5" /> 전체</button>
                             <button onClick={() => batchSelect('none')} className="px-4 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-rose-500 transition-all flex items-center gap-1.5 text-[10px] font-black shrink-0"><Square className="w-3.5 h-3.5" /> 해제</button>
                             <button onClick={() => batchSelect('wins')} className="px-4 py-1.5 rounded-lg bg-blue-600/20 border border-blue-400/30 hover:bg-blue-600 transition-all flex items-center gap-1.5 text-[10px] font-black shrink-0 text-blue-400 hover:text-white"><Target className="w-3.5 h-3.5" /> 득점</button>
                             <button onClick={() => batchSelect('losses')} className="px-4 py-1.5 rounded-lg bg-rose-600/20 border border-rose-400/30 hover:bg-rose-500 transition-all flex items-center gap-1.5 text-[10px] font-black shrink-0 text-rose-400 hover:text-white"><X className="w-3.5 h-3.5" /> 실점</button>
                             
-                            <div className="flex-1 min-w-[4px]" />
+                            <div className="flex-1" />
                             <button onClick={() => setIsIndividualLooping(!isIndividualLooping)} className={cn(
                                 "px-4 py-1.5 rounded-lg border flex items-center gap-1.5 text-[10px] font-black shrink-0 transition-all shadow-lg",
                                 isIndividualLooping ? "bg-yellow-400 border-yellow-300 text-black shadow-[0_0_20px_rgba(250,204,21,0.5)]" : "bg-white/5 border-white/10 text-white/30"
                             )}>
-                                <RotateCcw className={cn("w-3.5 h-3.5", isIndividualLooping && "animate-spin-slow")} /> 루프:{isIndividualLooping ? 'ON' : 'OFF'}
+                                <RotateCcw className={cn("w-3.5 h-3.5", isIndividualLooping && "animate-spin-slow")} /> 무한반복:{isIndividualLooping ? 'ON' : 'OFF'}
                             </button>
                         </div>
                     </div>
