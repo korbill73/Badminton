@@ -109,8 +109,37 @@ export default function ProArchiveMainPage() {
                 const meta = JSON.parse(jsonMatch[0]);
                 return meta.stats || { view_count: 0, view_duration: 0 };
             }
+            if (raw.trim().startsWith('{')) return JSON.parse(raw).stats || { view_count: 0, view_duration: 0 };
         } catch (e) {}
         return { view_count: 0, view_duration: 0 };
+    };
+
+    const formatDuration = (seconds: number) => {
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        return `${m}분 ${s}초`;
+    };
+
+    const incrementProMatchView = async (matchId: string, currentSummary: string) => {
+        try {
+            let fullMeta: any = {};
+            try {
+                const jsonMatch = currentSummary.match(/\{.*\}/s);
+                if (jsonMatch) fullMeta = JSON.parse(jsonMatch[0]);
+                else if (currentSummary.trim().startsWith('{')) fullMeta = JSON.parse(currentSummary);
+            } catch (e) {}
+
+            if (!fullMeta.stats) fullMeta.stats = { view_count: 0, view_duration: 0 };
+            fullMeta.stats.view_count += 1;
+
+            const updatedSummary = currentSummary.includes('{') 
+                ? currentSummary.replace(/\{.*\}/s, JSON.stringify(fullMeta))
+                : JSON.stringify(fullMeta);
+
+            await supabase.from('pro_matches').update({ summary: updatedSummary }).eq('id', matchId);
+        } catch (e) {
+            console.error("Pro view increment failed", e);
+        }
     };
 
     const fetchNotes = async (matchId: string) => {
@@ -419,7 +448,12 @@ export default function ProArchiveMainPage() {
                     
                     <div className="space-y-3 md:space-y-4">
                         {filteredMatches.map((m: any) => (
-                            <div key={m.id} onClick={() => { setStudyMatch(m); fetchNotes(m.id); hasTrackedViewRef.current = false; }} className="group relative bg-[#111827] rounded-2xl md:rounded-[3.2rem] p-4 md:px-10 md:py-7 transition-all duration-500 flex flex-col md:flex-row items-center border border-white/10 hover:border-blue-500 shadow-inner hover:scale-[1.012] cursor-pointer gap-4 md:gap-0">
+                            <div key={m.id} onClick={() => { 
+                                setStudyMatch(m); 
+                                fetchNotes(m.id); 
+                                hasTrackedViewRef.current = false;
+                                incrementProMatchView(m.id, m.summary || '');
+                            }} className="group relative bg-[#111827] rounded-2xl md:rounded-[3.2rem] p-4 md:px-10 md:py-7 transition-all duration-500 flex flex-col md:flex-row items-center border border-white/10 hover:border-blue-500 shadow-inner hover:scale-[1.012] cursor-pointer gap-4 md:gap-0">
                                 {/* Desktop Layout */}
                                 <div className="hidden md:flex w-[410px] shrink-0 border-r border-white/10 pr-8 items-center gap-5">
                                     <span className="flex items-center gap-2 text-sky-400 font-black text-xl"><Calendar className="w-4 h-4" /> {m.date}</span>
@@ -433,12 +467,12 @@ export default function ProArchiveMainPage() {
                                         <span className="flex-1 text-left font-black text-[24px] text-yellow-400 truncate max-w-[300px]">{m.opponent}{m.opponent_2_name && `/ ${m.opponent_2_name}`}</span>
                                     </div>
                                 </div>
-                                <div className="hidden md:flex flex-col items-center justify-center min-w-[180px] px-8 border-l border-white/10 opacity-60 group-hover:opacity-100 transition-opacity shrink-0">
-                                    <div className="flex items-center gap-2 text-sm font-black text-sky-400 uppercase tracking-widest whitespace-nowrap">
-                                        <Eye className="w-4 h-4" /> {parseStats(m.summary || '').view_count}회 시청
+                                <div className="hidden md:flex flex-col items-center justify-center min-w-[180px] px-8 border-l border-white/10 group-hover:scale-105 transition-transform shrink-0">
+                                    <div className="flex items-center gap-2 text-sm font-black text-cyan-400 uppercase tracking-widest whitespace-nowrap bg-cyan-400/10 px-4 py-1.5 rounded-full border border-cyan-400/20">
+                                        <Eye className="w-4 h-4" /> {parseStats(m.summary || '').view_count}회
                                     </div>
-                                    <div className="flex items-center gap-2 text-sm font-black text-amber-400 uppercase tracking-widest whitespace-nowrap mt-1">
-                                        <Clock className="w-4 h-4" /> {Math.floor(parseStats(m.summary || '').view_duration / 60)}분 경과
+                                    <div className="flex items-center gap-2 text-sm font-black text-yellow-400 uppercase tracking-widest whitespace-nowrap mt-2 bg-yellow-400/10 px-4 py-1.5 rounded-full border border-yellow-400/20">
+                                        <Clock className="w-4 h-4" /> {formatDuration(parseStats(m.summary || '').view_duration)}
                                     </div>
                                 </div>
                                     <div className="hidden md:flex w-[410px] shrink-0 items-center justify-end border-l border-white/10 pl-8 gap-6">
@@ -468,11 +502,11 @@ export default function ProArchiveMainPage() {
                                             <h3 className="text-[13px] font-black text-white leading-tight">
                                                 {m.tournament}
                                                 <span className="text-[10px] text-yellow-500 font-bold ml-2">@{m.location}</span>
-                                                <span className="inline-flex items-center gap-1 text-[10px] text-sky-400/80 font-bold ml-3 border-l border-white/10 pl-3">
+                                                <span className="inline-flex items-center gap-1 text-[11px] text-cyan-400 font-black ml-3 border-l border-white/10 pl-3">
                                                     <Eye className="w-3 h-3" /> {parseStats(m.summary || '').view_count}회
                                                 </span>
-                                                <span className="inline-flex items-center gap-1 text-[10px] text-amber-400/80 font-bold ml-2">
-                                                    <Clock className="w-3 h-3" /> {Math.floor(parseStats(m.summary || '').view_duration / 60)}분
+                                                <span className="inline-flex items-center gap-1 text-[11px] text-yellow-400 font-black ml-2">
+                                                    <Clock className="w-3 h-3" /> {formatDuration(parseStats(m.summary || '').view_duration)}
                                                 </span>
                                             </h3>
                                             <div className="flex items-center gap-2 text-[15px] font-black tracking-tight">

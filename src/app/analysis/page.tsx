@@ -132,6 +132,47 @@ export default function AnalysisArchivePage() {
         return matchesSearch && matchesCategory;
     });
 
+    const parseStats = (raw: string) => {
+        if (!raw) return { view_count: 0, view_duration: 0 };
+        try {
+            const jsonMatch = raw.match(/\{.*\}/s);
+            if (jsonMatch) {
+                const meta = JSON.parse(jsonMatch[0]);
+                return meta.stats || { view_count: 0, view_duration: 0 };
+            }
+            if (raw.trim().startsWith('{')) return JSON.parse(raw).stats || { view_count: 0, view_duration: 0 };
+        } catch (e) {}
+        return { view_count: 0, view_duration: 0 };
+    };
+
+    const formatDuration = (seconds: number) => {
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        return `${m}분 ${s}초`;
+    };
+
+    const incrementMatchView = async (matchId: string, currentNotes: string) => {
+        try {
+            let fullMeta: any = {};
+            try {
+                const jsonMatch = (currentNotes || '').match(/\{.*\}/s);
+                if (jsonMatch) fullMeta = JSON.parse(jsonMatch[0]);
+                else if ((currentNotes || '').trim().startsWith('{')) fullMeta = JSON.parse(currentNotes);
+            } catch (e) {}
+
+            if (!fullMeta.stats) fullMeta.stats = { view_count: 0, view_duration: 0 };
+            fullMeta.stats.view_count += 1;
+
+            const updatedNotes = (currentNotes || '').includes('{') 
+                ? currentNotes.replace(/\{.*\}/s, JSON.stringify(fullMeta))
+                : JSON.stringify(fullMeta);
+
+            await supabase.from('bd_matches').update({ feedback_notes: updatedNotes }).eq('id', matchId);
+        } catch (e) {
+            console.error("View increment failed", e);
+        }
+    };
+
     const stats = {
         total: matches.length,
         wins: matches.filter(m => m.match_result === 'win').length,
@@ -221,6 +262,7 @@ export default function AnalysisArchivePage() {
                         <Link
                             key={match.id}
                             href={`/analysis/detail?id=${match.id}`}
+                            onClick={() => incrementMatchView(match.id, match.feedback_notes || '')}
                             className="group bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 p-5 md:p-6 hover:border-blue-500 hover:shadow-xl hover:shadow-blue-100 dark:hover:shadow-blue-900/10 transition-all duration-300 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 md:gap-6"
                         >
                             <div className="flex items-center gap-4 md:gap-6 flex-1 min-w-0 w-full">
@@ -248,6 +290,12 @@ export default function AnalysisArchivePage() {
                                         <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1.5 border-l border-slate-200 dark:border-slate-700 pl-2 shrink-0">
                                             <Calendar className="w-3 h-3 opacity-50" /> {match.match_date}
                                         </span>
+                                        <div className="flex items-center gap-2 text-cyan-500 bg-cyan-500/10 px-2 py-0.5 rounded-full border border-cyan-500/20 text-[10px] font-black uppercase">
+                                            <PlayCircle className="w-3 h-3" /> {parseStats(match.feedback_notes || '').view_count}회
+                                        </div>
+                                        <div className="flex items-center gap-2 text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20 text-[10px] font-black uppercase">
+                                            <Clock className="w-3 h-3" /> {formatDuration(parseStats(match.feedback_notes || '').view_duration)}
+                                        </div>
                                     </div>
                                     <h3 className="text-lg md:text-xl font-black text-slate-900 dark:text-white group-hover:text-blue-600 transition-colors flex flex-wrap items-center gap-1 sm:gap-1.5">
                                         <span className="shrink-0">박준서 {match.partner && `& ${match.partner.name}`}</span>

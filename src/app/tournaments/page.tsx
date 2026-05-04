@@ -39,7 +39,7 @@ export default function TournamentListPage() {
             // 2. Fetch All Matches with joins
             const { data: mData, error: mError } = await supabase.from('bd_matches').select(`
                 id, match_name, match_type, match_result, match_date, created_at, tournament_id,
-                player_id, partner_id, opponent_1_id, opponent_2_id, youtube_video_id,
+                player_id, partner_id, opponent_1_id, opponent_2_id, youtube_video_id, feedback_notes,
                 set_1_score_player, set_1_score_opponent, 
                 set_2_score_player, set_2_score_opponent, 
                 set_3_score_player, set_3_score_opponent,
@@ -73,8 +73,40 @@ export default function TournamentListPage() {
                 const meta = JSON.parse(jsonMatch[0]);
                 return meta.stats || { view_count: 0, view_duration: 0 };
             }
+            // If it's just JSON
+            if (raw.trim().startsWith('{')) return JSON.parse(raw).stats || { view_count: 0, view_duration: 0 };
         } catch (e) {}
         return { view_count: 0, view_duration: 0 };
+    };
+
+    const formatDuration = (seconds: number) => {
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        return `${m}분 ${s}초`;
+    };
+
+    const incrementMatchView = async (matchId: string, currentNotes: string) => {
+        try {
+            let meta = parseStats(currentNotes); // This only gets stats
+            // We need full meta to preserve other data
+            let fullMeta: any = {};
+            try {
+                const jsonMatch = currentNotes.match(/\{.*\}/s);
+                if (jsonMatch) fullMeta = JSON.parse(jsonMatch[0]);
+                else if (currentNotes.trim().startsWith('{')) fullMeta = JSON.parse(currentNotes);
+            } catch (e) {}
+
+            if (!fullMeta.stats) fullMeta.stats = { view_count: 0, view_duration: 0 };
+            fullMeta.stats.view_count += 1;
+
+            const updatedNotes = currentNotes.includes('{') 
+                ? currentNotes.replace(/\{.*\}/s, JSON.stringify(fullMeta))
+                : JSON.stringify(fullMeta);
+
+            await supabase.from('bd_matches').update({ feedback_notes: updatedNotes }).eq('id', matchId);
+        } catch (e) {
+            console.error("View increment failed", e);
+        }
     };
 
     const handleSaveMatch = async (data: any) => {
@@ -349,7 +381,10 @@ export default function TournamentListPage() {
                                             return (
                                                 <div 
                                                     key={m.id} 
-                                                    onClick={() => router.push(`/analysis/detail?id=${m.id}`)}
+                                                    onClick={() => {
+                                                        incrementMatchView(m.id, m.feedback_notes);
+                                                        router.push(`/analysis/detail?id=${m.id}`);
+                                                    }}
                                                     className="group relative bg-[#111827]/40 rounded-2xl md:rounded-[2.5rem] p-4 md:p-6 transition-all duration-700 flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-0 hover:bg-blue-600/[0.25] border border-blue-500/60 shadow-[0_0_20px_rgba(59,130,246,0.25)] hover:border-blue-400 hover:shadow-[0_0_60px_rgba(59,130,246,0.6)] md:hover:-translate-y-2 cursor-pointer overflow-hidden"
                                                 >
                                                     <div className="absolute left-0 top-0 bottom-0 w-1 md:w-1.5 bg-blue-600 scale-y-0 group-hover:scale-y-100 transition-transform duration-500 origin-center shadow-[0_0_30px_rgba(37,99,235,0.9)]" />
@@ -394,11 +429,11 @@ export default function TournamentListPage() {
                                                                 </div>
                                                                 <div className="text-[10px] font-bold text-slate-500 whitespace-normal break-words opacity-80 flex items-center gap-3">
                                                                     <span>{m.match_name || '매치 기록'}</span>
-                                                                    <div className="flex items-center gap-2 text-sky-400/80 bg-sky-400/5 px-2 py-0.5 rounded-full border border-sky-400/10">
+                                                                    <div className="flex items-center gap-2 text-cyan-400 bg-cyan-400/10 px-2 py-0.5 rounded-full border border-cyan-400/20 font-black">
                                                                         <Eye className="w-2.5 h-2.5" /> {parseStats(m.feedback_notes).view_count}회
                                                                     </div>
-                                                                    <div className="flex items-center gap-2 text-amber-400/80 bg-amber-400/5 px-2 py-0.5 rounded-full border border-amber-400/10">
-                                                                        <Clock className="w-2.5 h-2.5" /> {Math.floor(parseStats(m.feedback_notes).view_duration / 60)}분
+                                                                    <div className="flex items-center gap-2 text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-full border border-yellow-400/20 font-black">
+                                                                        <Clock className="w-2.5 h-2.5" /> {formatDuration(parseStats(m.feedback_notes).view_duration)}
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -454,12 +489,12 @@ export default function TournamentListPage() {
                                                     </div>
 
                                                     <div className="hidden md:flex items-center justify-end gap-3 md:gap-6 relative z-10 transition-all">
-                                                        <div className="flex flex-col items-center justify-center min-w-[80px] px-4 opacity-40 group-hover:opacity-100 transition-opacity">
-                                                            <div className="flex items-center gap-1.5 text-[9px] font-black text-sky-400 uppercase tracking-widest whitespace-nowrap">
-                                                                <Eye className="w-3 h-3" /> {parseStats(m.feedback_notes).view_count}회
+                                                        <div className="flex flex-col items-center justify-center min-w-[100px] px-4 group-hover:scale-105 transition-transform">
+                                                            <div className="flex items-center gap-1.5 text-[11px] font-black text-cyan-400 uppercase tracking-widest whitespace-nowrap bg-cyan-400/10 px-3 py-1 rounded-full border border-cyan-400/20">
+                                                                <Eye className="w-3.5 h-3.5" /> {parseStats(m.feedback_notes).view_count}회
                                                             </div>
-                                                            <div className="flex items-center gap-1.5 text-[9px] font-black text-amber-400 uppercase tracking-widest whitespace-nowrap mt-1">
-                                                                <Clock className="w-3 h-3" /> {Math.floor(parseStats(m.feedback_notes).view_duration / 60)}분
+                                                            <div className="flex items-center gap-1.5 text-[11px] font-black text-yellow-400 uppercase tracking-widest whitespace-nowrap mt-2 bg-yellow-400/10 px-3 py-1 rounded-full border border-yellow-400/20">
+                                                                <Clock className="w-3.5 h-3.5" /> {formatDuration(parseStats(m.feedback_notes).view_duration)}
                                                             </div>
                                                         </div>
                                                         <button 
