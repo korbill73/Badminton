@@ -264,12 +264,12 @@ const AnalysisMobileView = ({
 
     return (
         <div className="fixed inset-0 z-[2000] bg-black flex flex-col landscape:flex-row overflow-hidden text-white">
-            <div className="flex-1 relative bg-black flex items-center justify-center" onClick={() => setShowControls(!showControls)}>
-                <div className="w-full aspect-video">
-                    <div id="youtube-player-mobile" className="w-full h-full" />
+            <div className="flex-1 relative bg-black flex items-center justify-center overflow-hidden" onClick={() => setShowControls(!showControls)}>
+                <div className="w-full aspect-video relative overflow-hidden">
+                    <div id="youtube-player-mobile" className="absolute top-[-44px] left-0 w-full h-[calc(100%+44px)] scale-[1.01]" />
                 </div>
                 {!isPlayerReady && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-20">
                         <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />
                     </div>
                 )}
@@ -373,7 +373,7 @@ const AnalysisMobileView = ({
                             )}
                         >
                             {isAutoNext ? <RefreshCcw className="w-4 h-4 landscape:w-3 h-3" /> : <RotateCcw className="w-4 h-4 landscape:w-3 h-3" />}
-                            {isAutoNext ? '자동' : '반복'}
+                            {isAutoNext ? '전체' : '반복'}
                         </button>
                         <button 
                             onClick={() => {
