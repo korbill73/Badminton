@@ -171,7 +171,8 @@ const CategoryModal = ({ isOpen, onClose, winCats, lossCats, onSave }: any) => {
 const AnalysisMobileView = ({ 
     match, onClose, logs, activeLoop, isSequential, setIsSequential, 
     isAutoNext, setIsAutoNext, setSequentialIndex, startRallyLoop, 
-    sequentialIndex, formatTime, setPlayer, rallyLoops 
+    sequentialIndex, formatTime, setPlayer, rallyLoops,
+    currentSet, setCurrentSet
 }: any) => {
     const [showControls, setShowControls] = useState(true);
     const [activeFilter, setActiveFilter] = useState('전체');
@@ -300,6 +301,27 @@ const AnalysisMobileView = ({
                 <div className="portrait:absolute portrait:top-2 portrait:left-1/2 portrait:-translate-x-1/2 portrait:w-12 portrait:h-1 portrait:bg-white/10 portrait:rounded-full" />
                 
                 <div className="flex-1 flex flex-col gap-2.5 landscape:gap-1.5 portrait:mt-2">
+                    <div className="grid grid-cols-3 gap-2 landscape:gap-1 w-full border-b border-white/5 pb-2.5">
+                        {[1, 2, 3].map(s => (
+                            <button 
+                                key={s} 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setCurrentSet(s);
+                                    setIsSequential(false);
+                                }}
+                                className={cn(
+                                    "py-2 landscape:py-1.5 rounded-xl border transition-all flex items-center justify-center gap-1.5 active:scale-95",
+                                    currentSet === s 
+                                        ? "bg-cyan-500 border-cyan-400 text-black shadow-[0_0_15px_rgba(34,211,238,0.4)]" 
+                                        : "bg-white/5 border-white/10 text-white/40"
+                                )}
+                            >
+                                <span className="text-[11px] landscape:text-[10px] font-black">{s}세트</span>
+                            </button>
+                        ))}
+                    </div>
+
                     <div className="grid grid-cols-3 gap-2 landscape:gap-1 w-full">
                         {filters.map((f: string) => {
                             const count = getFilteredLogs(f).length;
@@ -939,6 +961,8 @@ function CockpitAnalysisContent() {
                 formatTime={formatTime}
                 setPlayer={(p: any) => { playerRef.current = p; }}
                 rallyLoops={rallyLoops}
+                currentSet={currentSet}
+                setCurrentSet={setCurrentSet}
             />
         );
     }
