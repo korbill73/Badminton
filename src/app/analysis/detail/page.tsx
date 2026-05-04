@@ -410,7 +410,7 @@ function CockpitAnalysisContent() {
     }, []);
     
     // TACTICAL STATES
-    const [activeLoop, setActiveLoop] = useState<any>(null);
+    const [activeLoop, setActiveLoop] = useState<{ id: string, start: number, end: number } | null>(null);
     const [rallyLoops, setRallyLoops] = useState<Record<string, { start: number, end: number }>>({});
     const [selectedIndices, setSelectedIndices] = useState<Record<string, boolean>>({});
     const [isSequentialRally, setIsSequentialRally] = useState(false);
@@ -813,8 +813,8 @@ function CockpitAnalysisContent() {
         const start = bounds?.start || log.video_timestamp;
         const end = bounds?.end || 0;
         if (!end) { playerRef.current?.seekTo(start); return; }
-        if (!sequential && activeLoop && activeLoop.start === start) { setActiveLoop(null); setIsSequentialRally(false); return; }
-        setActiveLoop({ start, end });
+        if (!sequential && activeLoop && activeLoop.id === log.id) { setActiveLoop(null); setIsSequentialRally(false); return; }
+        setActiveLoop({ id: log.id, start, end });
         playerRef.current?.seekTo(start);
         playerRef.current?.playVideo();
     };
@@ -996,7 +996,7 @@ function CockpitAnalysisContent() {
                     <div ref={logListRef} className="flex-1 overflow-y-auto p-2 space-y-2 bg-[#080d1a] custom-scrollbar-hidden">
                         {cSetLogs.map((l, idx) => {
                             const loop = rallyLoops[l.id];
-                            const isLooping = (isSequentialRally && sequentialRallyIndex === idx) || (!isSequentialRally && activeLoop?.start === (loop?.start || l.video_timestamp));
+                            const isLooping = activeLoop?.id === l.id;
                             const isChecked = selectedIndices[l.id];
                             const isNew = newlyAddedId === l.id;
                             return (
