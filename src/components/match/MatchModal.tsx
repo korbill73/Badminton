@@ -182,9 +182,9 @@ const MatchModal = ({ isOpen, onClose, tournamentId, match, players, onSave }: {
                                     <div className="flex items-center bg-slate-900/50 border border-white/5 rounded-xl px-2 py-1.5 focus-within:border-blue-500 transition-all">
                                         <button onClick={() => openVideoAt(String(formData[`set_${s}_start` as keyof typeof formData]))} className="p-1 bg-blue-500/10 hover:bg-blue-500 text-blue-500 hover:text-white rounded-md transition-all mr-2"><Play className="w-3 h-3 fill-current" /></button>
                                         <input 
-                                            value={formData[`set_${s}_start` as keyof typeof formData]} 
+                                            value={String(formData[`set_${s}_start` as keyof typeof formData] || '') === '00:00' ? '' : String(formData[`set_${s}_start` as keyof typeof formData])} 
                                             onChange={e => setFormData({...formData, [`set_${s}_start`]: formatTimeInput(e.target.value)})} 
-                                            className="w-full bg-transparent outline-none font-black text-white text-xs text-center" 
+                                            className="w-full bg-transparent outline-none font-black text-white text-xs text-center placeholder:text-slate-600" 
                                             placeholder="00:00" 
                                             maxLength={5}
                                         />

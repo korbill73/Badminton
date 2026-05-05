@@ -843,11 +843,25 @@ function CockpitAnalysisContent() {
 
     // AUTO START WINS ON INITIAL LOAD
     useEffect(() => {
-        if (!hasAutoStarted && isPlayerReady) {
+        if (!hasAutoStarted && isPlayerReady && match && playerRef.current) {
+            const startTimeStr = match[`set_${currentSet}_start`] || '00:00';
+            const startTime = parseTimeToSeconds(startTimeStr);
+
+            // 1. 영상 위치를 시작 시간으로 이동
+            if (typeof playerRef.current.seekTo === 'function') {
+                try {
+                    playerRef.current.seekTo(startTime, true);
+                    setHasAutoStarted(true);
+                } catch (e) {
+                    console.warn("Initial seek failed", e);
+                }
+            }
+
+            // 2. 득점 로그가 있다면 득점 모드(Wins)를 활성화하여 UI 강조
             if (logs.length > 0) {
-                let hasWins = false;
-                const next = { ...selectedIndices };
                 const currentSetLogs = logs.filter(l => Number(l.set_number) === Number(currentSet));
+                const next: Record<string, boolean> = { ...selectedIndices };
+                let hasWins = false;
                 
                 currentSetLogs.forEach(l => {
                     next[l.id] = l.is_my_point;
@@ -855,29 +869,12 @@ function CockpitAnalysisContent() {
                 });
                 
                 setSelectedIndices(next);
-                setHasAutoStarted(true);
                 setPlaybackMode('wins');
                 
                 if (hasWins) {
-                    const activeRallies = currentSetLogs.filter(l => l.is_my_point && rallyLoops[l.id]?.end);
                     setIsSequentialRally(true);
                     setSequentialRallyIndex(0);
-                    setTimeout(() => {
-                        startRallyLoop(activeRallies[0], true);
-                    }, 500);
-                }
-            } else if (match && playerRef.current) {
-                // 기록이 없는 경우 1세트 시작 시간으로 이동
-                const startTimeStr = match[`set_${currentSet}_start`] || '00:00';
-                const startTime = parseTimeToSeconds(startTimeStr);
-                
-                if (typeof playerRef.current.seekTo === 'function') {
-                    try {
-                        playerRef.current.seekTo(startTime, true);
-                        setHasAutoStarted(true);
-                    } catch (e) {
-                        console.warn("Initial seek failed", e);
-                    }
+                    // 자동 재생 점프(startRallyLoop)는 1세트 시작 지점 유지를 위해 생략
                 }
             }
         }

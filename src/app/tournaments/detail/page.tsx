@@ -169,19 +169,22 @@ function TournamentDetailContent() {
         setMySetScore(match.my_set_score);
         setOppSetScore(match.opponent_set_score);
         setYoutubeId(match.youtube_video_id || '');
+        
+        // 1. 컬럼에서 우선적으로 읽기
+        setSet1Start(match.set_1_start || '00:00');
+        setSet2Start(match.set_2_start || '00:00');
+        setSet3Start(match.set_3_start || '00:00');
 
-        // Read offsets from feedback_notes if available
+        // 2. 컬럼이 비어있거나 기존 데이터 호환성을 위해 feedback_notes 체크
         if (match.feedback_notes && match.feedback_notes.startsWith('{')) {
             try {
                 const meta = JSON.parse(match.feedback_notes);
-                setSet1Start(meta.set1Start || '00:00');
-                setSet2Start(meta.set2Start || '00:00');
-                setSet3Start(meta.set3Start || '00:00');
+                if (match.set_1_start === '00:00' || !match.set_1_start) setSet1Start(meta.set1Start || '00:00');
+                if (match.set_2_start === '00:00' || !match.set_2_start) setSet2Start(meta.set2Start || '00:00');
+                if (match.set_3_start === '00:00' || !match.set_3_start) setSet3Start(meta.set3Start || '00:00');
             } catch (e) {
-                setSet1Start('00:00'); setSet2Start('00:00'); setSet3Start('00:00');
+                console.warn("JSON parse failed for notes", e);
             }
-        } else {
-            setSet1Start('00:00'); setSet2Start('00:00'); setSet3Start('00:00');
         }
         setShowAddModal(true);
     };
@@ -200,13 +203,7 @@ function TournamentDetailContent() {
         if (!tournamentId) return;
         setSubmitting(true);
 
-        const offsets = {
-            set1Start,
-            set2Start,
-            set3Start
-        };
-
-        const matchData = {
+        const matchData: any = {
             tournament_id: tournamentId,
             match_name: matchName,
             category,
@@ -217,9 +214,29 @@ function TournamentDetailContent() {
             my_set_score: mySetScore,
             opponent_set_score: oppSetScore,
             youtube_video_id: extractYoutubeId(youtubeId),
-            feedback_notes: JSON.stringify(offsets), // Store as JSON in feedback_notes
+            set_1_start: set1Start,
+            set_2_start: set2Start,
+            set_3_start: set3Start,
             match_result: mySetScore > oppSetScore ? 'win' : 'loss'
         };
+
+        // 기존 feedback_notes 데이터 보존을 위한 하이브리드 병합
+        if (editingMatch?.feedback_notes) {
+            try {
+                if (editingMatch.feedback_notes.startsWith('{')) {
+                    const prevMeta = JSON.parse(editingMatch.feedback_notes);
+                    const newMeta = { ...prevMeta, set1Start, set2Start, set3Start };
+                    matchData.feedback_notes = JSON.stringify(newMeta);
+                } else {
+                    // 텍스트 노트가 있는 경우 뒤에 JSON 추가
+                    matchData.feedback_notes = editingMatch.feedback_notes;
+                }
+            } catch (e) {
+                matchData.feedback_notes = editingMatch.feedback_notes;
+            }
+        } else {
+            matchData.feedback_notes = JSON.stringify({ set1Start, set2Start, set3Start });
+        }
 
         try {
             let error;
@@ -588,8 +605,8 @@ function TournamentDetailContent() {
                                                         <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">SET {s} START</label>
                                                         <input
                                                             type="text"
-                                                            placeholder="01:00"
-                                                            value={s === 1 ? set1Start : s === 2 ? set2Start : set3Start}
+                                                            placeholder="00:00"
+                                                            value={(s === 1 ? set1Start : s === 2 ? set2Start : set3Start) === '00:00' ? '' : (s === 1 ? set1Start : s === 2 ? set2Start : set3Start)}
                                                             onChange={(e) => {
                                                                 const v = formatTimeInput(e.target.value);
                                                                 if (s === 1) setSet1Start(v);
@@ -597,7 +614,7 @@ function TournamentDetailContent() {
                                                                 if (s === 3) setSet3Start(v);
                                                             }}
                                                             maxLength={5}
-                                                            className="w-full px-4 py-3 rounded-[15px] bg-white dark:bg-slate-800 border border-blue-50 dark:border-blue-900/20 text-center font-bold text-xs tabular-nums outline-none focus:ring-1 focus:ring-blue-500"
+                                                            className="w-full px-4 py-3 rounded-[15px] bg-white dark:bg-slate-800 border border-blue-50 dark:border-blue-900/20 text-center font-bold text-xs tabular-nums outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-slate-300 dark:placeholder:text-slate-600"
                                                         />
                                                     </div>
                                                 ))}
