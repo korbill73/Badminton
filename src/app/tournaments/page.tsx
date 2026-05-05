@@ -47,7 +47,9 @@ export default function TournamentListPage() {
                 partner:bd_players!partner_id(name, high_school, pro_team, univ_school, school_or_team),
                 opponent_1:bd_players!opponent_1_id(name, high_school, pro_team, univ_school, school_or_team), 
                 opponent_2:bd_players!opponent_2_id(name, high_school, pro_team, univ_school, school_or_team)
-            `).order('created_at', { ascending: false });
+            `)
+            .order('match_type', { ascending: true })
+            .order('created_at', { ascending: true });
 
             const { data: pData } = await supabase.from('bd_players').select('*').order('name');
 

@@ -896,29 +896,48 @@ function CockpitAnalysisContent() {
 
     // AUTO START WINS ON INITIAL LOAD
     useEffect(() => {
-        if (!hasAutoStarted && isPlayerReady && logs.length > 0) {
-            let hasWins = false;
-            const next = { ...selectedIndices };
-            const currentSetLogs = logs.filter(l => Number(l.set_number) === Number(currentSet));
-            
-            currentSetLogs.forEach(l => {
-                next[l.id] = l.is_my_point;
-                if (l.is_my_point && rallyLoops[l.id]?.end) hasWins = true;
-            });
-            
-            setSelectedIndices(next);
-            setHasAutoStarted(true);
-            
-            if (hasWins) {
-                const activeRallies = currentSetLogs.filter(l => l.is_my_point && rallyLoops[l.id]?.end);
-                setIsSequentialRally(true);
-                setSequentialRallyIndex(0);
-                setTimeout(() => {
-                    startRallyLoop(activeRallies[0], true);
-                }, 500);
+        if (!hasAutoStarted && isPlayerReady) {
+            if (logs.length > 0) {
+                let hasWins = false;
+                const next = { ...selectedIndices };
+                const currentSetLogs = logs.filter(l => Number(l.set_number) === Number(currentSet));
+                
+                currentSetLogs.forEach(l => {
+                    next[l.id] = l.is_my_point;
+                    if (l.is_my_point && rallyLoops[l.id]?.end) hasWins = true;
+                });
+                
+                setSelectedIndices(next);
+                setHasAutoStarted(true);
+                
+                if (hasWins) {
+                    const activeRallies = currentSetLogs.filter(l => l.is_my_point && rallyLoops[l.id]?.end);
+                    setIsSequentialRally(true);
+                    setSequentialRallyIndex(0);
+                    setTimeout(() => {
+                        startRallyLoop(activeRallies[0], true);
+                    }, 500);
+                }
+            } else if (match) {
+                // 기록이 없는 경우 1세트 시작 시간으로 이동
+                const startTime = parseTimeToSeconds(match.set_1_start || '00:00');
+                if (playerRef.current && typeof playerRef.current.seekTo === 'function') {
+                    playerRef.current.seekTo(startTime);
+                    setHasAutoStarted(true);
+                }
             }
         }
-    }, [isPlayerReady, logs, hasAutoStarted, currentSet, rallyLoops]);
+    }, [isPlayerReady, logs, hasAutoStarted, currentSet, rallyLoops, match]);
+
+    // AUTO SCROLL TO ACTIVE LOG
+    useEffect(() => {
+        if (activeLoop?.id) {
+            const el = document.getElementById(`log-${activeLoop.id}`);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+    }, [activeLoop]);
 
     const cSetLogs = useMemo(() => {
         const filtered = logs.filter(l => Number(l.set_number) === Number(currentSet));
@@ -1046,8 +1065,24 @@ function CockpitAnalysisContent() {
                 </div>
 
                 <div className="flex flex-col flex-1 overflow-hidden gap-1.5 h-full">
-                    <div className="w-full aspect-video bg-black rounded-[2rem] overflow-hidden border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)] shrink-0">
+                    <div className="w-full aspect-video bg-black rounded-[2rem] overflow-hidden border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)] shrink-0 relative">
                         <YoutubePlayer videoId={match?.youtube_video_id || ''} onPlayerReady={(p) => { playerRef.current = p; setIsPlayerReady(true); }} />
+                        
+                        {/* Playback Mode Indicators */}
+                        {isSequentialRally && (
+                            <div className="absolute top-4 left-4 z-20 flex flex-col gap-2">
+                                {cSetLogs.every(l => selectedIndices[l.id] === l.is_my_point && l.is_my_point) && (
+                                    <div className="px-4 py-1.5 bg-cyan-500 text-black text-[10px] font-black rounded-full flex items-center gap-2 animate-pulse shadow-[0_0_20px_rgba(34,211,238,0.5)]">
+                                        <Target className="w-3 h-3" /> 득점 재생 중 (WINS ONLY)
+                                    </div>
+                                )}
+                                {cSetLogs.every(l => selectedIndices[l.id] === !l.is_my_point && !l.is_my_point) && (
+                                    <div className="px-4 py-1.5 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center gap-2 animate-pulse shadow-[0_0_20px_rgba(244,63,94,0.5)]">
+                                        <X className="w-3 h-3" /> 실점 재생 중 (LOSS ONLY)
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                     <div className="flex-1 bg-black/30 border border-white/5 rounded-[2rem] p-3 overflow-hidden flex flex-col shadow-inner">
                         <div className="grid grid-cols-3 gap-3 h-full overflow-hidden">
@@ -1078,8 +1113,29 @@ function CockpitAnalysisContent() {
                         </div>
                         
                         <div className="flex items-center gap-2 bg-black/40 p-2 pr-6 rounded-[1.2rem] border border-white/5 overflow-x-auto custom-scrollbar-hidden">
-                            <button onClick={() => batchSelect('all')} className="px-5 py-2.5 rounded-lg bg-white/5 border border-white/10 hover:bg-yellow-400 hover:text-black transition-all flex items-center gap-1.5 text-xs font-black shrink-0"><CheckSquare className="w-4 h-4" /> 전체</button>
-                            <button onClick={() => batchSelect('none')} className="px-5 py-2.5 rounded-lg bg-white/5 border border-white/10 hover:bg-rose-500 transition-all flex items-center gap-1.5 text-xs font-black shrink-0"><Square className="w-4 h-4" /> 해제</button>
+                            <button 
+                                onClick={() => {
+                                    const allChecked = cSetLogs.every(l => selectedIndices[l.id]);
+                                    batchSelect(allChecked ? 'none' : 'all');
+                                }} 
+                                className={cn(
+                                    "px-5 py-2.5 rounded-lg border transition-all flex items-center gap-1.5 text-xs font-black shrink-0",
+                                    cSetLogs.length > 0 && cSetLogs.every(l => selectedIndices[l.id])
+                                        ? "bg-yellow-400 border-yellow-300 text-black shadow-[0_0_15px_rgba(250,204,21,0.4)]"
+                                        : "bg-white/5 border-white/10 text-white/40 hover:bg-white/10"
+                                )}
+                            >
+                                <CheckSquare className="w-4 h-4" /> 전체
+                            </button>
+                            <button onClick={() => {
+                                // 선택된 것만 반복 모드로 전환 시각화 (이미 기능은 AUTO PLAY에 포함됨)
+                                setIsSequentialRally(true);
+                                setSequentialRallyIndex(0);
+                                const firstSelected = cSetLogs.find(l => selectedIndices[l.id] && rallyLoops[l.id]?.end);
+                                if (firstSelected) startRallyLoop(firstSelected, true);
+                            }} className="px-5 py-2.5 rounded-lg bg-white/5 border border-white/10 hover:bg-cyan-500 hover:text-black transition-all flex items-center gap-1.5 text-xs font-black shrink-0">
+                                <Square className="w-4 h-4" /> 선택
+                            </button>
                             <button onClick={() => batchSelect('wins')} className="px-5 py-2.5 rounded-lg bg-blue-600/20 border border-blue-400/30 hover:bg-blue-600 transition-all flex items-center gap-1.5 text-xs font-black shrink-0 text-blue-400 hover:text-white"><Target className="w-4 h-4" /> 득점</button>
                             <button onClick={() => batchSelect('losses')} className="px-5 py-2.5 rounded-lg bg-rose-600/20 border border-rose-400/30 hover:bg-rose-500 transition-all flex items-center gap-1.5 text-xs font-black shrink-0 text-rose-400 hover:text-white"><X className="w-4 h-4" /> 실점</button>
                             
@@ -1100,7 +1156,7 @@ function CockpitAnalysisContent() {
                             const isChecked = selectedIndices[l.id];
                             const isNew = newlyAddedId === l.id;
                             return (
-                                <div key={l.id} className={cn(
+                                <div id={`log-${l.id}`} key={l.id} className={cn(
                                     "group/row p-2 px-3 rounded-[1.5rem] border transition-all duration-300 relative overflow-hidden",
                                     isLooping ? "bg-blue-600/30 border-cyan-500 shadow-[inset_0_0_30px_rgba(6,182,212,0.3)] scale-[1.02] z-10" : "bg-[#0b1221] border-white/5 hover:border-white/20 shadow-sm",
                                     isNew && "border-yellow-400 ring-2 ring-yellow-400/50 animate-pulse-glow"
@@ -1113,8 +1169,8 @@ function CockpitAnalysisContent() {
                                             </button>
                                             <div className="flex flex-col cursor-pointer flex-1" onClick={() => startRallyLoop(l)}>
                                                 <div className="flex items-center gap-2">
-                                                    <span className={cn("text-3xl font-black tabular-nums tracking-tighter", l.is_my_point ? "text-cyan-400 drop-shadow-[0_0_10px_rgba(34,211,238,0.4)]" : "text-rose-500 drop-shadow-[0_0_10px_rgba(244,63,94,0.4)]")}>{l.current_score}</span>
-                                                    <span className="text-base font-black text-white/95 uppercase truncate tracking-tight italic">{l.point_type}</span>
+                                                    <span className={cn("text-2xl font-black tabular-nums tracking-tighter", l.is_my_point ? "text-cyan-400 drop-shadow-[0_0_10px_rgba(34,211,238,0.4)]" : "text-rose-500 drop-shadow-[0_0_10px_rgba(244,63,94,0.4)]")}>{l.current_score}</span>
+                                                    <span className="text-[13px] font-black text-white/95 uppercase truncate tracking-tight italic max-w-[120px]">{l.point_type}</span>
                                                 </div>
                                                 <div className="flex items-center gap-2 mt-1 px-4 py-1 bg-black/60 rounded-full w-fit border border-white/10 shadow-inner">
                                                     <Target className="w-3.5 h-3.5 text-cyan-400/70" />
