@@ -384,8 +384,11 @@ function CockpitAnalysisContent() {
     const [isPlayerReady, setIsPlayerReady] = useState(false);
     const [hasAutoStarted, setHasAutoStarted] = useState(false);
     const [isMatchModalOpen, setIsMatchModalOpen] = useState(false);
+    const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
     const [players, setPlayers] = useState<any[]>([]);
     const hasTrackedViewRef = useRef(false);
+    const sessionStartTimeRef = useRef<number | null>(null);
+    const accumulatedSessionTimeRef = useRef(0);
 
     useEffect(() => {
         const checkMobile = () => {
@@ -472,48 +475,55 @@ function CockpitAnalysisContent() {
 
     useEffect(() => { fetchData(true); }, [matchId]);
 
+    const incrementMatchView = async (currentMatch: any) => {
+        const currentMeta = parseHybridNotes(currentMatch.feedback_notes);
+        const stats = currentMeta.stats || { view_count: 0, view_duration: 0, view_history: [] };
+        stats.view_count += 1;
+        
+        // Add a new session entry
+        const newSession = { id: Date.now(), date: new Date().toISOString(), duration: 0 };
+        if (!stats.view_history) stats.view_history = [];
+        stats.view_history.push(newSession);
+
+        const newMeta = { ...currentMeta, stats };
+        let newRaw = currentMatch.feedback_notes || "";
+        const jsonMatch = newRaw.match(/\{.*\}/s);
+        if (jsonMatch) newRaw = newRaw.replace(jsonMatch[0], JSON.stringify(newMeta));
+        else newRaw = (newRaw ? newRaw + "\n\n" : "") + JSON.stringify(newMeta);
+
+        await supabase.from('bd_matches').update({ feedback_notes: newRaw }).eq('id', matchId);
+    };
+
+    const updatePlayTime = async (seconds: number) => {
+        if (!matchId || seconds <= 0) return;
+        
+        const { data: m } = await supabase.from('bd_matches').select('feedback_notes').eq('id', matchId).single();
+        if (!m) return;
+
+        const meta = parseHybridNotes(m.feedback_notes);
+        const stats = meta.stats || { view_count: 0, view_duration: 0, view_history: [] };
+        stats.view_duration += seconds;
+        
+        // Update the last session's duration
+        if (stats.view_history && stats.view_history.length > 0) {
+            stats.view_history[stats.view_history.length - 1].duration += seconds;
+        }
+
+        const newMeta = { ...meta, stats };
+        let newRaw = m.feedback_notes || "";
+        const jsonMatch = newRaw.match(/\{.*\}/s);
+        if (jsonMatch) newRaw = newRaw.replace(jsonMatch[0], JSON.stringify(newMeta));
+        else newRaw = (newRaw ? newRaw + "\n\n" : "") + JSON.stringify(newMeta);
+
+        await supabase.from('bd_matches').update({ feedback_notes: newRaw }).eq('id', matchId);
+    };
+
     // VIEW STATS TRACKING
     useEffect(() => {
         if (!matchId || !match || hasTrackedViewRef.current) return;
-        
         hasTrackedViewRef.current = true;
-        
-        const updateViewCount = async () => {
-            // Fetch fresh data for the most accurate update
-            const { data: freshMatch } = await supabase.from('bd_matches').select('feedback_notes').eq('id', matchId).single();
-            if (!freshMatch) return;
-
-            const currentMeta = parseHybridNotes(freshMatch.feedback_notes);
-            const stats = currentMeta.stats || { view_count: 0, view_duration: 0 };
-            stats.view_count += 1;
-            
-            let newRaw = freshMatch.feedback_notes || "";
-            const jsonMatch = newRaw.match(/\{.*\}/s);
-            if (jsonMatch) newRaw = newRaw.replace(jsonMatch[0], JSON.stringify({ ...currentMeta, stats }));
-            else newRaw = (newRaw ? newRaw + "\n\n" : "") + JSON.stringify({ ...currentMeta, stats });
-            
-            await supabase.from('bd_matches').update({ feedback_notes: newRaw }).eq('id', matchId);
-        };
-        updateViewCount();
-
-        const durationTimer = setInterval(async () => {
-            const { data: latestMatch } = await supabase.from('bd_matches').select('feedback_notes').eq('id', matchId).single();
-            if (latestMatch) {
-                const currentMeta = parseHybridNotes(latestMatch.feedback_notes);
-                const stats = currentMeta.stats || { view_count: 0, view_duration: 0 };
-                stats.view_duration += 10;
-                
-                let newRaw = latestMatch.feedback_notes || "";
-                const jsonMatch = newRaw.match(/\{.*\}/s);
-                if (jsonMatch) newRaw = newRaw.replace(jsonMatch[0], JSON.stringify({ ...currentMeta, stats }));
-                else newRaw = (newRaw ? newRaw + "\n\n" : "") + JSON.stringify({ ...currentMeta, stats });
-                
-                await supabase.from('bd_matches').update({ feedback_notes: newRaw }).eq('id', matchId);
-            }
-        }, 10000);
-
-        return () => clearInterval(durationTimer);
-    }, [matchId, match !== null]); // Run when match becomes non-null
+        incrementMatchView(match);
+    }, [matchId, match !== null]);
 
     // AUTO SCROLL TO BOTTOM ON LOG CHANGE
     useEffect(() => {
@@ -548,6 +558,14 @@ function CockpitAnalysisContent() {
             if (!playerRef.current) return;
             const curr = playerRef.current.getCurrentTime();
             setActiveTime(Math.floor(curr)); 
+            if (playerRef.current.getPlayerState() === 1) { // Playing
+                accumulatedSessionTimeRef.current += 0.15;
+                if (accumulatedSessionTimeRef.current >= 30) {
+                    updatePlayTime(Math.floor(accumulatedSessionTimeRef.current));
+                    accumulatedSessionTimeRef.current = 0;
+                }
+            }
+
             if (activeLoop && playerRef.current.getPlayerState() === 1) {
                 if (curr >= activeLoop.end - 0.1) {
                     if (isSequentialRally) {
@@ -563,8 +581,26 @@ function CockpitAnalysisContent() {
                 }
             }
         }, 150);
-        return () => clearInterval(interval);
+        return () => {
+            clearInterval(interval);
+            if (accumulatedSessionTimeRef.current > 0) {
+                updatePlayTime(Math.floor(accumulatedSessionTimeRef.current));
+            }
+        };
     }, [activeLoop, isSequentialRally, sequentialRallyIndex, logs, rallyLoops, currentSet, selectedIndices, isIndividualLooping]);
+
+    useEffect(() => {
+        const handleUnload = () => {
+            if (accumulatedSessionTimeRef.current > 0) {
+                // We use a small hack for unload - navigator.sendBeacon is better but we don't have an API endpoint for it.
+                // Since this is a small update, we'll just try to fire and forget if possible, 
+                // but usually the next session will catch up or we rely on the 30s intervals.
+                updatePlayTime(Math.floor(accumulatedSessionTimeRef.current));
+            }
+        };
+        window.addEventListener('beforeunload', handleUnload);
+        return () => window.removeEventListener('beforeunload', handleUnload);
+    }, []);
 
     const saveHybridMeta = async (updates: any, refresh = true) => {
         if (!matchId) return;
@@ -1009,6 +1045,14 @@ function CockpitAnalysisContent() {
                             <span className="text-xs font-black text-yellow-400 tabular-nums">{formatTime(totalLoopTime)}</span>
                         </div>
                     )}
+                    <button 
+                        onClick={() => setIsHistoryModalOpen(true)}
+                        className="flex items-center gap-2 px-4 h-8 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all text-white/50 hover:text-white"
+                        title="시청 기록 로그"
+                    >
+                        <Clock className="w-3.5 h-3.5" />
+                        <span className="text-[10px] font-black uppercase tracking-widest">LOG</span>
+                    </button>
                     <button onClick={() => setIsCatModalOpen(true)} className="p-2.5 bg-white/5 border border-white/20 rounded-lg text-white hover:bg-cyan-500 transition-all hover:rotate-90 shadow-lg active:scale-90"><Settings2 className="w-4 h-4" /></button>
                 </div>
             </div>
@@ -1226,6 +1270,56 @@ function CockpitAnalysisContent() {
                         }
                     }}
                 />
+            )}
+
+            {isHistoryModalOpen && (
+                <div className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/80 backdrop-blur-md p-4" onClick={() => setIsHistoryModalOpen(false)}>
+                    <div className="bg-[#0b1221] border border-white/10 w-full max-w-md rounded-[2.5rem] p-8 flex flex-col shadow-2xl animate-in zoom-in-95 duration-300" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-8">
+                            <div className="space-y-1">
+                                <h2 className="text-2xl font-black text-white italic uppercase tracking-tighter">View History Log</h2>
+                                <p className="text-[10px] font-black text-cyan-400/60 uppercase tracking-widest">영상 시청 세션 상세 기록</p>
+                            </div>
+                            <button onClick={() => setIsHistoryModalOpen(false)} className="p-3 bg-white/5 rounded-2xl hover:bg-rose-500/20 text-white/50 hover:text-rose-500 transition-all"><X className="w-6 h-6" /></button>
+                        </div>
+                        
+                        <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-3 max-h-[50vh]">
+                            {(() => {
+                                const stats = parseHybridNotes(match?.feedback_notes).stats;
+                                const history = stats?.view_history || [];
+                                if (history.length === 0) return <div className="py-20 text-center text-white/20 font-black italic">기록된 시청 세션이 없습니다.</div>;
+                                
+                                return [...history].reverse().map((h: any) => (
+                                    <div key={h.id} className="bg-white/5 border border-white/5 p-4 rounded-2xl flex items-center justify-between group hover:bg-white/10 transition-all">
+                                        <div className="flex flex-col gap-1">
+                                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{new Date(h.date).toLocaleDateString()}</span>
+                                            <span className="text-sm font-black text-white">{new Date(h.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                        </div>
+                                        <div className="flex flex-col items-end gap-1">
+                                            <span className="text-[9px] font-black text-cyan-400/40 uppercase tracking-widest">Duration</span>
+                                            <span className="text-base font-black text-cyan-400 tabular-nums">{Math.floor(h.duration / 60)}분 {h.duration % 60}초</span>
+                                        </div>
+                                    </div>
+                                ));
+                            })()}
+                        </div>
+
+                        <div className="mt-8 pt-6 border-t border-white/10 flex justify-between items-center">
+                            <div className="flex flex-col">
+                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Total Play Time</span>
+                                <span className="text-xl font-black text-yellow-400 tabular-nums">
+                                    {Math.floor((parseHybridNotes(match?.feedback_notes).stats?.view_duration || 0) / 60)}분 {(parseHybridNotes(match?.feedback_notes).stats?.view_duration || 0) % 60}초
+                                </span>
+                            </div>
+                            <div className="flex flex-col items-end">
+                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Total Views</span>
+                                <span className="text-xl font-black text-blue-400 tabular-nums">
+                                    {parseHybridNotes(match?.feedback_notes).stats?.view_count || 0}회
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             )}
             <style jsx global>{`
                 .custom-scrollbar-hidden::-webkit-scrollbar { width: 0px; height: 0px; } 

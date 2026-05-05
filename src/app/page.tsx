@@ -102,7 +102,7 @@ export default function Dashboard() {
         const calc = (matchList: any[], isPro = false) => {
             let views = 0, duration = 0;
             matchList.forEach(m => {
-                const s = parseStats(isPro ? m.summary : m.summary || '');
+                const s = parseStats(isPro ? m.summary : (m.feedback_notes || m.summary || ''));
                 views += s.view_count || 0;
                 duration += s.view_duration || 0;
             });
