@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, Suspense, useMemo, useRef } from 'react';
+import React, { useState, useEffect, Suspense, useMemo, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
@@ -439,7 +439,7 @@ function CockpitAnalysisContent() {
         }
     };
 
-    const fetchData = async (isInitial = false) => {
+    const fetchData = useCallback(async (isInitial = false) => {
         const sanitizedId = String(matchId || "").trim();
         if (!sanitizedId) return;
         if (isInitial) setLoading(true);
@@ -454,7 +454,6 @@ function CockpitAnalysisContent() {
                     setWinCats(meta.customCategories.win || initialWin);
                     setLossCats(meta.customCategories.loss || initialLoss);
                 } else if (meta.v3_WIN) {
-                    // Handle specific [CAT_CONFIG_V3] structure if directly parsed
                     setWinCats(initialWin); setLossCats(initialLoss);
                 }
                 if (meta.rallyLoopsV2) setRallyLoops(meta.rallyLoopsV2);
@@ -471,28 +470,13 @@ function CockpitAnalysisContent() {
         } finally {
             if (isInitial) setLoading(false);
         }
-    };
+    }, [matchId, initialWin, initialLoss]);
 
-    useEffect(() => { fetchData(true); }, [matchId]);
+    useEffect(() => { 
+        if (matchId) fetchData(true); 
+    }, [matchId, fetchData]);
 
-    const incrementMatchView = async (currentMatch: any) => {
-        const currentMeta = parseHybridNotes(currentMatch.feedback_notes);
-        const stats = currentMeta.stats || { view_count: 0, view_duration: 0, view_history: [] };
-        stats.view_count += 1;
-        
-        // Add a new session entry
-        const newSession = { id: Date.now(), date: new Date().toISOString(), duration: 0 };
-        if (!stats.view_history) stats.view_history = [];
-        stats.view_history.push(newSession);
 
-        const newMeta = { ...currentMeta, stats };
-        let newRaw = currentMatch.feedback_notes || "";
-        const jsonMatch = newRaw.match(/\{.*\}/s);
-        if (jsonMatch) newRaw = newRaw.replace(jsonMatch[0], JSON.stringify(newMeta));
-        else newRaw = (newRaw ? newRaw + "\n\n" : "") + JSON.stringify(newMeta);
-
-        await supabase.from('bd_matches').update({ feedback_notes: newRaw }).eq('id', matchId);
-    };
 
     const updatePlayTime = async (seconds: number) => {
         if (!matchId || seconds <= 0) return;
@@ -522,8 +506,30 @@ function CockpitAnalysisContent() {
     useEffect(() => {
         if (!matchId || !match || hasTrackedViewRef.current) return;
         hasTrackedViewRef.current = true;
-        incrementMatchView(match);
-    }, [matchId, match !== null]);
+        
+        // Use local variable to avoid closure issues with match
+        const targetMatch = match;
+        const incrementMatchView = async (currentMatch: any) => {
+            if (!currentMatch) return;
+            const currentMeta = parseHybridNotes(currentMatch.feedback_notes);
+            const stats = currentMeta.stats || { view_count: 0, view_duration: 0, view_history: [] };
+            stats.view_count += 1;
+            
+            const newSession = { id: Date.now(), date: new Date().toISOString(), duration: 0 };
+            if (!stats.view_history) stats.view_history = [];
+            stats.view_history.push(newSession);
+
+            const newMeta = { ...currentMeta, stats };
+            let newRaw = currentMatch.feedback_notes || "";
+            const jsonMatch = newRaw.match(/\{.*\}/s);
+            if (jsonMatch) newRaw = newRaw.replace(jsonMatch[0], JSON.stringify(newMeta));
+            else newRaw = (newRaw ? newRaw + "\n\n" : "") + JSON.stringify(newMeta);
+
+            await supabase.from('bd_matches').update({ feedback_notes: newRaw }).eq('id', matchId);
+        };
+        
+        incrementMatchView(targetMatch);
+    }, [matchId, match]);
 
     // AUTO SCROLL TO BOTTOM ON LOG CHANGE
     useEffect(() => {
@@ -1074,7 +1080,16 @@ function CockpitAnalysisContent() {
 
                 <div className="flex flex-col flex-1 overflow-hidden gap-1.5 h-full">
                     <div className="w-full aspect-video bg-black rounded-[2rem] overflow-hidden border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)] shrink-0 relative">
-                        <YoutubePlayer videoId={match?.youtube_video_id || ''} onPlayerReady={(p) => { playerRef.current = p; setIsPlayerReady(true); }} />
+                        <YoutubePlayer 
+                            key={match?.youtube_video_id || 'no-video'}
+                            videoId={match?.youtube_video_id || ''} 
+                            onPlayerReady={(p) => { 
+                                if (p) {
+                                    playerRef.current = p; 
+                                    setIsPlayerReady(true); 
+                                }
+                            }} 
+                        />
                         
                         {/* Playback Mode Indicators */}
                         {isSequentialRally && (
@@ -1285,7 +1300,8 @@ function CockpitAnalysisContent() {
                         
                         <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-3 max-h-[50vh]">
                             {(() => {
-                                const stats = parseHybridNotes(match?.feedback_notes).stats;
+                                const meta = parseHybridNotes(match?.feedback_notes);
+                                const stats = meta?.stats;
                                 const history = stats?.view_history || [];
                                 if (history.length === 0) return <div className="py-20 text-center text-white/20 font-black italic">기록된 시청 세션이 없습니다.</div>;
                                 
