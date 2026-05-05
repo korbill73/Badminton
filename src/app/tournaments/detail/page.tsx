@@ -68,6 +68,10 @@ function TournamentDetailContent() {
             const { data: tData } = await supabase.from('bd_tournaments').select('*').eq('id', tournamentId).single();
             setTournament(tData);
 
+            const { data: mData } = await supabase.from('bd_matches').select(`
+                *,
+                opponent_1:bd_players!opponent_1_id(name),
+                opponent_2:bd_players!opponent_2_id(name),
                 partner:bd_players!partner_id(name)
             `).eq('tournament_id', tournamentId)
             .order('match_type', { ascending: true })
