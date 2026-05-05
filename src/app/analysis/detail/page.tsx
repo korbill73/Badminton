@@ -176,13 +176,11 @@ const CategoryModal = ({ isOpen, onClose, winCats, lossCats, onSave }: any) => {
 const AnalysisMobileView = ({ 
     match, onClose, logs, activeLoop, isSequential, setIsSequential, 
     isAutoNext, setIsAutoNext, setSequentialIndex, startRallyLoop, 
-    sequentialIndex, formatTime, setPlayer, rallyLoops,
+    sequentialIndex, formatTime, isPlayerReady, setIsPlayerReady, playerRef, rallyLoops,
     currentSet, setCurrentSet
 }: any) => {
     const [showControls, setShowControls] = useState(true);
     const [activeFilter, setActiveFilter] = useState('전체');
-    const [isPlayerReady, setIsPlayerReady] = useState(false);
-    const playerRef = useRef<any>(null);
 
     const toggleFullScreen = () => {
         if (!document.fullscreenElement) {
@@ -194,67 +192,9 @@ const AnalysisMobileView = ({
         }
     };
 
-    useEffect(() => {
-        if (!(window as any).YT) {
-            const tag = document.createElement('script');
-            tag.src = "https://www.youtube.com/iframe_api";
-            tag.id = "youtube-iframe-api-mobile";
-            const firstScriptTag = document.getElementsByTagName('script')[0];
-            if (firstScriptTag && firstScriptTag.parentNode) {
-                firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-            } else {
-                document.head.appendChild(tag);
-            }
-        }
-
-        const initPlayer = () => {
-            const rawVideoId = match.youtube_video_id;
-            if (!rawVideoId) return;
-            const videoId = rawVideoId.includes('v=') ? rawVideoId.split('v=')[1].split('&')[0] : rawVideoId;
-
-            new (window as any).YT.Player('youtube-player-mobile', {
-                height: '100%',
-                width: '100%',
-                videoId: videoId,
-                playerVars: {
-                    autoplay: 1,
-                    controls: 0,
-                    modestbranding: 1,
-                    rel: 0,
-                    playsinline: 1,
-                    iv_load_policy: 3,
-                    enablejsapi: 1,
-                    origin: typeof window !== 'undefined' ? window.location.origin : undefined
-                },
-                events: {
-                    onReady: (event: any) => {
-                        setIsPlayerReady(true);
-                        playerRef.current = event.target;
-                        setPlayer(event.target);
-                    },
-                    onError: () => setIsPlayerReady(true) // 에러 시에도 스피너 제거
-                }
-            });
-        };
-
-        // 로딩이 너무 길어지면 강제로 스피너 제거
-        const fallbackTimer = setTimeout(() => setIsPlayerReady(true), 5000);
-
-        const checkYT = setInterval(() => {
-            if ((window as any).YT && (window as any).YT.Player) {
-                initPlayer();
-                clearInterval(checkYT);
-            }
-        }, 500);
-
-        return () => {
-            clearInterval(checkYT);
-            clearTimeout(fallbackTimer);
-            if (playerRef.current) {
-                try { playerRef.current.destroy(); } catch(e) {}
-            }
-        };
-    }, [match?.youtube_video_id]);
+    const onReady = (player: any) => {
+        setIsPlayerReady(true);
+    };
 
     const filters = ['전체', '득점', '실점'];
 
@@ -270,8 +210,8 @@ const AnalysisMobileView = ({
     return (
         <div className="fixed inset-0 z-[2000] bg-black flex flex-col landscape:flex-row overflow-hidden text-white">
             <div className="flex-1 relative bg-black flex items-center justify-center" onClick={() => setShowControls(!showControls)}>
-                <div className="w-full aspect-video">
-                    <div id="youtube-player-mobile" className="w-full h-full" />
+                <div className="w-full h-full">
+                    <YoutubePlayer videoId={match?.youtube_video_id || ''} onPlayerReady={onReady} />
                 </div>
                 {!isPlayerReady && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-20">
@@ -926,12 +866,18 @@ function CockpitAnalysisContent() {
                         startRallyLoop(activeRallies[0], true);
                     }, 500);
                 }
-            } else if (match) {
+            } else if (match && playerRef.current) {
                 // 기록이 없는 경우 1세트 시작 시간으로 이동
-                const startTime = parseTimeToSeconds(match.set_1_start || '00:00');
-                if (playerRef.current && typeof playerRef.current.seekTo === 'function') {
-                    playerRef.current.seekTo(startTime);
-                    setHasAutoStarted(true);
+                const startTimeStr = match[`set_${currentSet}_start`] || '00:00';
+                const startTime = parseTimeToSeconds(startTimeStr);
+                
+                if (typeof playerRef.current.seekTo === 'function') {
+                    try {
+                        playerRef.current.seekTo(startTime, true);
+                        setHasAutoStarted(true);
+                    } catch (e) {
+                        console.warn("Initial seek failed", e);
+                    }
                 }
             }
         }
@@ -1000,7 +946,9 @@ function CockpitAnalysisContent() {
                 startRallyLoop={startRallyLoop}
                 sequentialIndex={sequentialRallyIndex}
                 formatTime={formatTime}
-                setPlayer={(p: any) => { playerRef.current = p; }}
+                isPlayerReady={isPlayerReady}
+                setIsPlayerReady={setIsPlayerReady}
+                playerRef={playerRef}
                 rallyLoops={rallyLoops}
                 currentSet={currentSet}
                 setCurrentSet={setCurrentSet}
