@@ -332,7 +332,8 @@ const AnalysisMobileView = ({
                             >
                                 {setNum}세트
                             </button>
-                        ))}
+                        );
+                    })}
                     </div>
 
                     <div className="grid grid-cols-3 gap-2 landscape:gap-1 w-full">
