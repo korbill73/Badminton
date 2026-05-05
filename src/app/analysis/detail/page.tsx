@@ -172,7 +172,7 @@ const AnalysisMobileView = ({
     match, onClose, logs, activeLoop, isSequential, setIsSequential, 
     isAutoNext, setIsAutoNext, setSequentialIndex, startRallyLoop, 
     sequentialIndex, formatTime, setPlayer, rallyLoops,
-    currentSet, setCurrentSet, offsets
+    currentSet, setCurrentSet
 }: any) => {
     const [showControls, setShowControls] = useState(true);
     const [activeFilter, setActiveFilter] = useState('전체');
@@ -314,7 +314,7 @@ const AnalysisMobileView = ({
                     <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
                     {[1, 2, 3].map(setNum => {
                         // 3세트가 00:00이면 2세트에서 끝난 것이므로 표시하지 않음
-                        if (setNum === 3 && offsets.set3Start === '00:00') return null;
+                        if (setNum === 3 && match?.set_3_start === '00:00') return null;
                         
                         return (
                             <button
@@ -977,7 +977,6 @@ function CockpitAnalysisContent() {
                 rallyLoops={rallyLoops}
                 currentSet={currentSet}
                 setCurrentSet={setCurrentSet}
-                offsets={offsets}
             />
         );
     }
@@ -1015,7 +1014,7 @@ function CockpitAnalysisContent() {
                 <div className="flex items-center gap-6">
                     <div className="flex bg-black/40 p-1 rounded-xl border border-white/10 shadow-inner">
                         {[1, 2, 3].map(s => {
-                            if (s === 3 && offsets.set3Start === '00:00') return null;
+                            if (s === 3 && match?.set_3_start === '00:00') return null;
                             return (
                                 <button key={s} onClick={() => { setCurrentSet(s); setIsSequentialRally(false); }} className={cn("px-8 h-10 text-xs font-black transition-all rounded-lg", currentSet === s ? "text-cyan-400 bg-cyan-400/20 border border-cyan-400/30 shadow-sm" : "text-white/30 hover:text-white")}>{s}세트</button>
                             );

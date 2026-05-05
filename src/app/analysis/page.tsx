@@ -4,15 +4,12 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { BDMatch } from '@/types';
-import {
-    Video,
-    Search,
-    ChevronRight,
+import { 
+    Search, Filter, ChevronRight, PlayCircle, Calendar, ArrowUpRight, 
+    TrendingUp, Award, Video, Eye, Play, Clock,
     Trophy,
     Loader2,
-    PlayCircle,
     BarChart3,
-    Calendar,
     Edit2,
     MapPin
 } from 'lucide-react';
