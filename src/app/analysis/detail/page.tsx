@@ -536,22 +536,22 @@ function CockpitAnalysisContent() {
     }, [logs.length, currentSet]);
 
     // AUTO SEEK ON SET SWITCH
-    const prevSetRef = useRef<number>(currentSet);
+    const prevSetRef = useRef<number | null>(null);
     useEffect(() => {
-        if (!playerRef.current || !match) return;
+        if (!playerRef.current || !match || !isPlayerReady) return;
         
-        // Only seek if set changed OR it's the initial load
+        // Seek if set changed OR it's the initial load
         const setChanged = prevSetRef.current !== currentSet;
         const startTimeStr = match[`set_${currentSet}_start`];
         
-        if (startTimeStr && (setChanged || !prevSetRef.current)) {
+        if (startTimeStr && (setChanged || prevSetRef.current === null)) {
             const seconds = parseTimeToSeconds(startTimeStr);
             if (seconds > 0) {
                 playerRef.current.seekTo(seconds, true);
             }
         }
         prevSetRef.current = currentSet;
-    }, [currentSet, match]);
+    }, [currentSet, match, isPlayerReady]);
 
     useEffect(() => {
         const interval = setInterval(() => {
