@@ -456,6 +456,7 @@ function CockpitAnalysisContent() {
     const [sequentialRallyIndex, setSequentialRallyIndex] = useState(0);
     const [isIndividualLooping, setIsIndividualLooping] = useState(true);
     const [newlyAddedId, setNewlyAddedId] = useState<string | null>(null);
+    const [playbackMode, setPlaybackMode] = useState<'all' | 'selection' | 'wins' | 'losses' | 'none'>('none');
     const logListRef = useRef<HTMLDivElement>(null);
 
     const initialWin = [{ group: '스매시', items: ['직선 스매시', '대각 스매시', '반 스매시', '스매시 + 푸시'] }, { group: '드롭', items: ['직선', '대각(크로스)'] }, { group: '네트 플레이', items: ['헤어핀', '크로스 헤어핀', '푸시', '네트 킬'] }, { group: '기타 공격', items: ['드라이브', '클리어 공격', '롱서브', '행운의 득점'] }, { group: '상대 에러', items: ['언더 에러', '스매시 에러', '서브 에러', '클리어 에러', '기본기 에러', '백핸드 에러'] }];
@@ -865,6 +866,7 @@ function CockpitAnalysisContent() {
         });
         setSelectedIndices(next);
         saveHybridMeta({ selectedIndices: next });
+        setPlaybackMode(mode === 'none' ? 'none' : mode);
     };
 
     const startRallyLoop = (log: any, sequential: boolean = false) => {
@@ -1120,24 +1122,39 @@ function CockpitAnalysisContent() {
                                 }} 
                                 className={cn(
                                     "px-5 py-2.5 rounded-lg border transition-all flex items-center gap-1.5 text-xs font-black shrink-0",
-                                    cSetLogs.length > 0 && cSetLogs.every(l => selectedIndices[l.id])
-                                        ? "bg-yellow-400 border-yellow-300 text-black shadow-[0_0_15px_rgba(250,204,21,0.4)]"
+                                    playbackMode === 'all'
+                                        ? "bg-yellow-400 border-yellow-300 text-black shadow-[0_0_20px_rgba(250,204,21,0.5)] scale-105"
                                         : "bg-white/5 border-white/10 text-white/40 hover:bg-white/10"
                                 )}
                             >
                                 <CheckSquare className="w-4 h-4" /> 전체
                             </button>
                             <button onClick={() => {
-                                // 선택된 것만 반복 모드로 전환 시각화 (이미 기능은 AUTO PLAY에 포함됨)
                                 setIsSequentialRally(true);
                                 setSequentialRallyIndex(0);
+                                setPlaybackMode('selection');
                                 const firstSelected = cSetLogs.find(l => selectedIndices[l.id] && rallyLoops[l.id]?.end);
                                 if (firstSelected) startRallyLoop(firstSelected, true);
-                            }} className="px-5 py-2.5 rounded-lg bg-white/5 border border-white/10 hover:bg-cyan-500 hover:text-black transition-all flex items-center gap-1.5 text-xs font-black shrink-0">
+                            }} className={cn(
+                                "px-5 py-2.5 rounded-lg border transition-all flex items-center gap-1.5 text-xs font-black shrink-0",
+                                playbackMode === 'selection'
+                                    ? "bg-cyan-500 border-cyan-400 text-black shadow-[0_0_20px_rgba(34,211,238,0.5)] scale-105"
+                                    : "bg-white/5 border-white/10 text-white/40 hover:bg-white/10"
+                            )}>
                                 <Square className="w-4 h-4" /> 선택
                             </button>
-                            <button onClick={() => batchSelect('wins')} className="px-5 py-2.5 rounded-lg bg-blue-600/20 border border-blue-400/30 hover:bg-blue-600 transition-all flex items-center gap-1.5 text-xs font-black shrink-0 text-blue-400 hover:text-white"><Target className="w-4 h-4" /> 득점</button>
-                            <button onClick={() => batchSelect('losses')} className="px-5 py-2.5 rounded-lg bg-rose-600/20 border border-rose-400/30 hover:bg-rose-500 transition-all flex items-center gap-1.5 text-xs font-black shrink-0 text-rose-400 hover:text-white"><X className="w-4 h-4" /> 실점</button>
+                            <button onClick={() => batchSelect('wins')} className={cn(
+                                "px-5 py-2.5 rounded-lg border transition-all flex items-center gap-1.5 text-xs font-black shrink-0",
+                                playbackMode === 'wins'
+                                    ? "bg-blue-600 border-blue-400 text-white shadow-[0_0_20px_rgba(37,99,235,0.5)] scale-105"
+                                    : "bg-blue-600/20 border-blue-400/30 text-blue-400 hover:bg-blue-600 hover:text-white"
+                            )}><Target className="w-4 h-4" /> 득점</button>
+                            <button onClick={() => batchSelect('losses')} className={cn(
+                                "px-5 py-2.5 rounded-lg border transition-all flex items-center gap-1.5 text-xs font-black shrink-0",
+                                playbackMode === 'losses'
+                                    ? "bg-rose-600 border-rose-400 text-white shadow-[0_0_20px_rgba(225,29,72,0.5)] scale-105"
+                                    : "bg-rose-600/20 border-rose-400/30 text-rose-400 hover:bg-rose-500 hover:text-white"
+                            )}><X className="w-4 h-4" /> 실점</button>
                             
                             <div className="flex-1 min-w-[20px]" />
                             <button onClick={() => setIsIndividualLooping(!isIndividualLooping)} className={cn(
@@ -1187,8 +1204,10 @@ function CockpitAnalysisContent() {
                                                 <button onClick={() => setRallyBound(l.id, 'end', playerRef.current?.getCurrentTime() || 0)} className={cn("px-4 py-1.5 rounded-xl font-black text-[11px] transition-all shadow-md", loop?.end ? "bg-rose-600 text-white shadow-rose-600/30" : "bg-white/5 text-white/30 hover:text-white hover:bg-white/10")}>B</button>
                                                 <span className="text-[9px] font-black text-rose-500/90 tabular-nums">{loop?.end ? formatTime(loop.end) : '--:--'}</span>
                                             </div>
-                                            <button onClick={() => setEditingLog({ id: l.id, type: l.point_type, is_my_point: l.is_my_point, set_number: l.set_number })} className="ml-1 p-2 text-white/20 hover:text-blue-400 transition-all opacity-0 group-hover/row:opacity-100 hover:rotate-12 active:scale-75" title="유형 수정"><SquarePen className="w-4 h-4" /></button>
-                                            <button onClick={() => deletePoint(l.id, l.set_number)} className="p-2 text-white/20 hover:text-rose-500 transition-all opacity-0 group-hover/row:opacity-100 hover:rotate-12 active:scale-75" title="삭제"><Trash2 className="w-4 h-4" /></button>
+                                            <div className="flex flex-col gap-0.5 ml-1 border-l border-white/10 pl-1.5">
+                                                <button onClick={() => setEditingLog({ id: l.id, type: l.point_type, is_my_point: l.is_my_point, set_number: l.set_number })} className="p-1.5 text-white/20 hover:text-blue-400 transition-all opacity-0 group-hover/row:opacity-100 hover:scale-110" title="유형 수정"><SquarePen className="w-3.5 h-3.5" /></button>
+                                                <button onClick={() => deletePoint(l.id, l.set_number)} className="p-1.5 text-white/20 hover:text-rose-500 transition-all opacity-0 group-hover/row:opacity-100 hover:scale-110" title="삭제"><Trash2 className="w-3.5 h-3.5" /></button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
