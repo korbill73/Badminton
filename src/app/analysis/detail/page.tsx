@@ -62,7 +62,12 @@ const CategoryModal = ({ isOpen, onClose, winCats, lossCats, onSave }: any) => {
     const [localWin, setLocalWin] = useState(winCats);
     const [localLoss, setLocalLoss] = useState(lossCats);
     const [newGroupTitle, setNewGroupTitle] = useState('');
-    useEffect(() => { setLocalWin(winCats); setLocalLoss(lossCats); }, [winCats, lossCats]);
+    useEffect(() => {
+        if (isOpen) {
+            setLocalWin(JSON.parse(JSON.stringify(winCats)));
+            setLocalLoss(JSON.parse(JSON.stringify(lossCats)));
+        }
+    }, [isOpen, winCats, lossCats]);
     if (!isOpen) return null;
 
     const addItem = (type: 'win' | 'loss', gIdx: number) => {
@@ -911,6 +916,7 @@ function CockpitAnalysisContent() {
                 
                 setSelectedIndices(next);
                 setHasAutoStarted(true);
+                setPlaybackMode('wins');
                 
                 if (hasWins) {
                     const activeRallies = currentSetLogs.filter(l => l.is_my_point && rallyLoops[l.id]?.end);
