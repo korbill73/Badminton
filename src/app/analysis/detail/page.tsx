@@ -172,7 +172,7 @@ const AnalysisMobileView = ({
     match, onClose, logs, activeLoop, isSequential, setIsSequential, 
     isAutoNext, setIsAutoNext, setSequentialIndex, startRallyLoop, 
     sequentialIndex, formatTime, setPlayer, rallyLoops,
-    currentSet, setCurrentSet
+    currentSet, setCurrentSet, offsets
 }: any) => {
     const [showControls, setShowControls] = useState(true);
     const [activeFilter, setActiveFilter] = useState('전체');
@@ -311,23 +311,26 @@ const AnalysisMobileView = ({
                         </button>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2 landscape:gap-1 w-full border-b border-white/5 pb-2.5">
-                        {[1, 2, 3].map(s => (
-                            <button 
-                                key={s} 
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setCurrentSet(s);
+                    <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
+                    {[1, 2, 3].map(setNum => {
+                        // 3세트가 00:00이면 2세트에서 끝난 것이므로 표시하지 않음
+                        if (setNum === 3 && offsets.set3Start === '00:00') return null;
+                        
+                        return (
+                            <button
+                                key={setNum}
+                                onClick={() => {
+                                    setCurrentSet(setNum);
                                     setIsSequential(false);
                                 }}
                                 className={cn(
-                                    "py-2 landscape:py-1.5 rounded-xl border transition-all flex items-center justify-center gap-1.5 active:scale-95",
-                                    currentSet === s 
-                                        ? "bg-cyan-500 border-cyan-400 text-black shadow-[0_0_15px_rgba(34,211,238,0.4)]" 
-                                        : "bg-white/5 border-white/10 text-white/40"
+                                    "px-5 py-2.5 rounded-2xl text-xs font-black transition-all whitespace-nowrap border shrink-0",
+                                    currentSet === setNum
+                                        ? "bg-cyan-500 text-black border-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.4)]"
+                                        : "bg-white/5 text-white/40 border-white/10 hover:bg-white/10"
                                 )}
                             >
-                                <span className="text-[11px] landscape:text-[10px] font-black">{s}세트</span>
+                                {setNum}세트
                             </button>
                         ))}
                     </div>
@@ -973,6 +976,7 @@ function CockpitAnalysisContent() {
                 rallyLoops={rallyLoops}
                 currentSet={currentSet}
                 setCurrentSet={setCurrentSet}
+                offsets={offsets}
             />
         );
     }
@@ -1009,9 +1013,12 @@ function CockpitAnalysisContent() {
 
                 <div className="flex items-center gap-6">
                     <div className="flex bg-black/40 p-1 rounded-xl border border-white/10 shadow-inner">
-                        {[1, 2, 3].map(s => (
-                            <button key={s} onClick={() => { setCurrentSet(s); setIsSequentialRally(false); }} className={cn("px-8 h-10 text-xs font-black transition-all rounded-lg", currentSet === s ? "text-cyan-400 bg-cyan-400/20 border border-cyan-400/30 shadow-sm" : "text-white/30 hover:text-white")}>{s}세트</button>
-                        ))}
+                        {[1, 2, 3].map(s => {
+                            if (s === 3 && offsets.set3Start === '00:00') return null;
+                            return (
+                                <button key={s} onClick={() => { setCurrentSet(s); setIsSequentialRally(false); }} className={cn("px-8 h-10 text-xs font-black transition-all rounded-lg", currentSet === s ? "text-cyan-400 bg-cyan-400/20 border border-cyan-400/30 shadow-sm" : "text-white/30 hover:text-white")}>{s}세트</button>
+                            );
+                        })}
                     </div>
                     {totalLoopTime > 0 && (
                         <div className="flex items-center gap-2 bg-yellow-400/10 border border-yellow-400/30 px-4 h-8 rounded-xl shadow-[0_0_15px_rgba(250,204,21,0.2)]">

@@ -148,6 +148,12 @@ function TournamentDetailContent() {
         }
     };
 
+    const formatTimeInput = (val: string) => {
+        const cleaned = val.replace(/\D/g, '').slice(0, 4);
+        if (cleaned.length <= 2) return cleaned;
+        return cleaned.slice(0, cleaned.length - 2) + ':' + cleaned.slice(cleaned.length - 2);
+    };
+
     useEffect(() => { fetchData(); }, [tournamentId]);
 
     const handleOpenEdit = (match: any) => {
@@ -583,11 +589,12 @@ function TournamentDetailContent() {
                                                             placeholder="01:00"
                                                             value={s === 1 ? set1Start : s === 2 ? set2Start : set3Start}
                                                             onChange={(e) => {
-                                                                const v = e.target.value;
+                                                                const v = formatTimeInput(e.target.value);
                                                                 if (s === 1) setSet1Start(v);
                                                                 if (s === 2) setSet2Start(v);
                                                                 if (s === 3) setSet3Start(v);
                                                             }}
+                                                            maxLength={5}
                                                             className="w-full px-4 py-3 rounded-[15px] bg-white dark:bg-slate-800 border border-blue-50 dark:border-blue-900/20 text-center font-bold text-xs tabular-nums outline-none focus:ring-1 focus:ring-blue-500"
                                                         />
                                                     </div>

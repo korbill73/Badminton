@@ -68,6 +68,12 @@ const MatchModal = ({ isOpen, onClose, tournamentId, match, players, onSave }: {
         window.open(`https://youtube.com/watch?v=${formData.youtube_video_id}&t=${seconds}s`, '_blank');
     };
 
+    const formatTimeInput = (val: string) => {
+        const cleaned = val.replace(/\D/g, '').slice(0, 4);
+        if (cleaned.length <= 2) return cleaned;
+        return cleaned.slice(0, cleaned.length - 2) + ':' + cleaned.slice(cleaned.length - 2);
+    };
+
     if (!isOpen) return null;
 
     return (
@@ -175,7 +181,13 @@ const MatchModal = ({ isOpen, onClose, tournamentId, match, players, onSave }: {
                                     <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest pl-1">Set {s} Start</p>
                                     <div className="flex items-center bg-slate-900/50 border border-white/5 rounded-xl px-2 py-1.5 focus-within:border-blue-500 transition-all">
                                         <button onClick={() => openVideoAt(String(formData[`set_${s}_start` as keyof typeof formData]))} className="p-1 bg-blue-500/10 hover:bg-blue-500 text-blue-500 hover:text-white rounded-md transition-all mr-2"><Play className="w-3 h-3 fill-current" /></button>
-                                        <input value={formData[`set_${s}_start` as keyof typeof formData]} onChange={e=>setFormData({...formData, [`set_${s}_start`]: e.target.value})} className="w-full bg-transparent outline-none font-black text-white text-xs text-center" placeholder="00:00" />
+                                        <input 
+                                            value={formData[`set_${s}_start` as keyof typeof formData]} 
+                                            onChange={e => setFormData({...formData, [`set_${s}_start`]: formatTimeInput(e.target.value)})} 
+                                            className="w-full bg-transparent outline-none font-black text-white text-xs text-center" 
+                                            placeholder="00:00" 
+                                            maxLength={5}
+                                        />
                                     </div>
                                 </div>
                             ))}
