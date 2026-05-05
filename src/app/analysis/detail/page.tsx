@@ -9,9 +9,10 @@ import {
     Settings2, Trash2, Activity, Clock, FastForward,
     Circle, CheckCircle, X, Plus, Save, Target, 
     RotateCcw, ListFilter, CheckSquare, Square, ListOrdered,
-    BarChart3, Video, RefreshCcw, Maximize2, Layers, ChevronLeft, ChevronRight, PlayCircle, StopCircle, Loader2, RotateCw, SquarePen
+    BarChart3, Video, RefreshCcw, Maximize2, Layers, ChevronLeft, ChevronRight, PlayCircle, StopCircle, Loader2, RotateCw, SquarePen, Settings
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import MatchModal from '@/components/match/MatchModal';
 
 class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error: Error | null}> {
   constructor(props: {children: React.ReactNode}) {
@@ -382,6 +383,8 @@ function CockpitAnalysisContent() {
     const [editingLog, setEditingLog] = useState<{ id: string, type: string, is_my_point: boolean, set_number: number } | null>(null);
     const [isPlayerReady, setIsPlayerReady] = useState(false);
     const [hasAutoStarted, setHasAutoStarted] = useState(false);
+    const [isMatchModalOpen, setIsMatchModalOpen] = useState(false);
+    const [players, setPlayers] = useState<any[]>([]);
     const hasTrackedViewRef = useRef(false);
 
     useEffect(() => {
@@ -457,6 +460,9 @@ function CockpitAnalysisContent() {
             const { data: lData, error: lErr } = await supabase.from('bd_point_logs').select('*').eq('match_id', sanitizedId).order('created_at', { ascending: true });
             if (lErr) alert(`❌ 로그 데이터 로드 실패: ${lErr.message}`);
             setLogs(lData || []);
+
+            const { data: pData } = await supabase.from('bd_players').select('*').order('name');
+            setPlayers(pData || []);
         } catch (e: any) { 
             alert(`❗ 데이터 처리 중 오류: ${e.message}`); 
         } finally {
@@ -960,7 +966,12 @@ function CockpitAnalysisContent() {
                 <div className="flex items-center gap-6">
                     <button onClick={() => router.back()} className="p-1 px-4 bg-white/5 border border-white/20 rounded-lg text-white font-black text-[10px] hover:bg-blue-600 transition-all shadow-lg active:scale-95">BACK</button>
                     <div className="flex flex-col">
-                        <h1 className="text-xs font-black text-white">{match?.match_name}</h1>
+                        <div className="flex items-center gap-2">
+                            <h1 className="text-xs font-black text-white">{match?.match_name}</h1>
+                            <button onClick={() => setIsMatchModalOpen(true)} className="p-1 text-white/30 hover:text-cyan-400 transition-colors">
+                                <Settings className="w-3 h-3" />
+                            </button>
+                        </div>
                         <p className="text-[9px] font-black text-cyan-400 uppercase tracking-widest leading-none opacity-60 italic">Strategic Hub v4.3</p>
                     </div>
                 </div>
@@ -1198,6 +1209,24 @@ function CockpitAnalysisContent() {
             )}
 
             <CategoryModal isOpen={isCatModalOpen} onClose={() => setIsCatModalOpen(false)} winCats={winCats} lossCats={lossCats} onSave={handleCategorySave} />
+
+            {isMatchModalOpen && (
+                <MatchModal 
+                    isOpen={isMatchModalOpen}
+                    onClose={() => setIsMatchModalOpen(false)}
+                    match={match}
+                    players={players}
+                    onSave={async (data: any) => {
+                        const { id, opponent_1, opponent_2, partner, ...cleanData } = data;
+                        const { error } = await supabase.from('bd_matches').update(cleanData).eq('id', matchId);
+                        if (error) alert("경기 정보 업데이트 실패: " + error.message);
+                        else {
+                            setIsMatchModalOpen(false);
+                            fetchData(false);
+                        }
+                    }}
+                />
+            )}
             <style jsx global>{`
                 .custom-scrollbar-hidden::-webkit-scrollbar { width: 0px; height: 0px; } 
                 .custom-scrollbar::-webkit-scrollbar { width: 3px; } 
