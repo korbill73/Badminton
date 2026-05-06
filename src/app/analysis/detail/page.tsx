@@ -366,6 +366,9 @@ const AnalysisMobileView = ({
 };
 
 // --- Cockpit Page ---
+const INITIAL_WIN = [{ group: '스매시', items: ['직선 스매시', '대각 스매시', '반 스매시', '스매시 + 푸시'] }, { group: '드롭', items: ['직선', '대각(크로스)'] }, { group: '네트 플레이', items: ['헤어핀', '크로스 헤어핀', '푸시', '네트 킬'] }, { group: '기타 공격', items: ['드라이브', '클리어 공격', '롱서브', '행운의 득점'] }, { group: '상대 에러', items: ['언더 에러', '스매시 에러', '서브 에러', '클리어 에러', '기본기 에러', '백핸드 에러'] }];
+const INITIAL_LOSS = [{ group: '상대 공격 득점', items: ['스매시', '대각 스매시', '헤어핀', '크 헤어핀', '드롭', '헤 + 푸시'] }, { group: '전술 당함', items: ['페인트 모션', '코스 속임수', '템포 변화', '빽공략 + 공격'] }, { group: '나의 에러', items: ['스매시 에러', '드롭 에러', '언더 에러', '헤어핀 에러', '클리어 에러', '기본기 에러'] }];
+
 function CockpitAnalysisContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -409,11 +412,42 @@ function CockpitAnalysisContent() {
     const [newlyAddedId, setNewlyAddedId] = useState<string | null>(null);
     const [playbackMode, setPlaybackMode] = useState<'all' | 'selection' | 'wins' | 'losses' | 'none'>('none');
     const logListRef = useRef<HTMLDivElement>(null);
+    const hasJumpedToStartRef = useRef(false);
+    const isMountedRef = useRef(true);
 
-    const initialWin = [{ group: '스매시', items: ['직선 스매시', '대각 스매시', '반 스매시', '스매시 + 푸시'] }, { group: '드롭', items: ['직선', '대각(크로스)'] }, { group: '네트 플레이', items: ['헤어핀', '크로스 헤어핀', '푸시', '네트 킬'] }, { group: '기타 공격', items: ['드라이브', '클리어 공격', '롱서브', '행운의 득점'] }, { group: '상대 에러', items: ['언더 에러', '스매시 에러', '서브 에러', '클리어 에러', '기본기 에러', '백핸드 에러'] }];
-    const initialLoss = [{ group: '상대 공격 득점', items: ['스매시', '대각 스매시', '헤어핀', '크 헤어핀', '드롭', '헤 + 푸시'] }, { group: '전술 당함', items: ['페인트 모션', '코스 속임수', '템포 변화', '빽공략 + 공격'] }, { group: '나의 에러', items: ['스매시 에러', '드롭 에러', '언더 에러', '헤어핀 에러', '클리어 에러', '기본기 에러'] }];
-    const [winCats, setWinCats] = useState(initialWin);
-    const [lossCats, setLossCats] = useState(initialLoss);
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => { isMountedRef.current = false; };
+    }, []);
+
+    const handlePlayerReady = useCallback((player: any) => {
+        playerRef.current = player;
+        setIsPlayerReady(true);
+    }, []);
+
+    const handlePlayerStateChange = useCallback((event: any) => {
+        // 1 = PLAYING
+        if (event.data === 1 && !hasJumpedToStartRef.current && match) {
+            const startTimeStr = match[`set_${currentSet}_start`] || '00:00';
+            const startTime = parseTimeToSeconds(startTimeStr);
+            if (startTime > 0) {
+                    try {
+                        if (typeof event.target.getIframe === 'function' && event.target.getIframe()) {
+                            event.target.seekTo(startTime, true);
+                            hasJumpedToStartRef.current = true;
+                            console.log(`Initial Play Jump: Moved to ${startTimeStr}`);
+                        }
+                    } catch (e) {
+                        console.warn("Play jump failed", e);
+                    }
+            } else {
+                hasJumpedToStartRef.current = true;
+            }
+        }
+    }, [match, currentSet]);
+
+    const [winCats, setWinCats] = useState(INITIAL_WIN);
+    const [lossCats, setLossCats] = useState(INITIAL_LOSS);
 
     const parseHybridNotes = (raw: string) => {
         if (!raw) return {};
@@ -443,34 +477,88 @@ function CockpitAnalysisContent() {
         const sanitizedId = String(matchId || "").trim();
         if (!sanitizedId) return;
         if (isInitial) setLoading(true);
-        try {
-            const { data: mData, error: mErr } = await supabase.from('bd_matches').select(`*, opponent_1:bd_players!opponent_1_id(name)`).eq('id', sanitizedId).single();
-            if (mErr) alert(`❌ 매치 정보 로드 실패: ${mErr.message}`);
-            
-            if (mData) {
-                setMatch(mData);
-                const meta = parseHybridNotes(mData.feedback_notes);
-                if (meta.customCategories) {
-                    setWinCats(meta.customCategories.win || initialWin);
-                    setLossCats(meta.customCategories.loss || initialLoss);
-                } else if (meta.v3_WIN) {
-                    setWinCats(initialWin); setLossCats(initialLoss);
-                }
-                if (meta.rallyLoopsV2) setRallyLoops(meta.rallyLoopsV2);
-                if (meta.selectedIndices) setSelectedIndices(meta.selectedIndices);
-            }
-            const { data: lData, error: lErr } = await supabase.from('bd_point_logs').select('*').eq('match_id', sanitizedId).order('created_at', { ascending: true });
-            if (lErr) alert(`❌ 로그 데이터 로드 실패: ${lErr.message}`);
-            setLogs(lData || []);
+        
+        let retryCount = 0;
+        const maxRetries = 3;
 
-            const { data: pData } = await supabase.from('bd_players').select('*').order('name');
-            setPlayers(pData || []);
-        } catch (e: any) { 
-            alert(`❗ 데이터 처리 중 오류: ${e.message}`); 
-        } finally {
-            if (isInitial) setLoading(false);
-        }
-    }, [matchId, initialWin, initialLoss]);
+        const attemptFetch = async (): Promise<boolean> => {
+            if (!isMountedRef.current) return true;
+            try {
+                const { data: mData, error: mErr } = await supabase
+                    .from('bd_matches')
+                    .select(`*, opponent_1:bd_players!opponent_1_id(name)`)
+                    .eq('id', sanitizedId)
+                    .single();
+                
+                if (!isMountedRef.current) return true;
+
+                if (mErr) {
+                    console.error("Match fetch error:", mErr);
+                    if (mErr.message?.includes('Failed to fetch') && retryCount < maxRetries) return false;
+                    // Do not alert if unmounted
+                    if (isMountedRef.current) alert(`❌ 매치 정보 로드 실패: ${mErr.message}`);
+                    return true; 
+                }
+                
+                if (mData && isMountedRef.current) {
+                    setMatch(mData);
+                    const meta = parseHybridNotes(mData.feedback_notes);
+                    if (meta.customCategories) {
+                        setWinCats(meta.customCategories.win || INITIAL_WIN);
+                        setLossCats(meta.customCategories.loss || INITIAL_LOSS);
+                    } else if (meta.v3_WIN) {
+                        setWinCats(INITIAL_WIN); setLossCats(INITIAL_LOSS);
+                    }
+                    if (meta.rallyLoopsV2) setRallyLoops(meta.rallyLoopsV2);
+                    if (meta.selectedIndices) setSelectedIndices(meta.selectedIndices);
+                }
+
+                if (!isMountedRef.current) return true;
+
+                const { data: lData, error: lErr } = await supabase
+                    .from('bd_point_logs')
+                    .select('*')
+                    .eq('match_id', sanitizedId)
+                    .order('created_at', { ascending: true });
+                
+                if (lErr) {
+                    console.error("Logs fetch error:", lErr);
+                    if (lErr.message?.includes('Failed to fetch') && retryCount < maxRetries) return false;
+                    if (isMountedRef.current) alert(`❌ 로그 데이터 로드 실패: ${lErr.message}`);
+                } else if (isMountedRef.current) {
+                    setLogs(lData || []);
+                }
+
+                if (!isMountedRef.current) return true;
+
+                const { data: pData } = await supabase.from('bd_players').select('*').order('name');
+                if (isMountedRef.current) setPlayers(pData || []);
+                
+                return true;
+            } catch (e: any) {
+                if (!isMountedRef.current) return true;
+                console.error("Fetch implementation error:", e);
+                if (e.message?.includes('Failed to fetch') && retryCount < maxRetries) return false;
+                alert(`❗ 데이터 처리 중 오류: ${e.message}`);
+                return true;
+            }
+        };
+
+        const runFetchWithRetry = async () => {
+            while (retryCount <= maxRetries && isMountedRef.current) {
+                const success = await attemptFetch();
+                if (success || !isMountedRef.current) break;
+                retryCount++;
+                if (retryCount <= maxRetries && isMountedRef.current) {
+                    console.log(`Retrying fetch... (${retryCount}/${maxRetries})`);
+                    await new Promise(res => setTimeout(res, 1000 * retryCount)); 
+                }
+            }
+            if (isInitial && isMountedRef.current) setLoading(false);
+        };
+
+        runFetchWithRetry();
+    }, [matchId]);
 
     useEffect(() => { 
         if (matchId) fetchData(true); 
@@ -553,7 +641,11 @@ function CockpitAnalysisContent() {
         if (startTimeStr && (setChanged || prevSetRef.current === null)) {
             const seconds = parseTimeToSeconds(startTimeStr);
             if (seconds > 0) {
-                playerRef.current.seekTo(seconds, true);
+                try {
+                    if (typeof playerRef.current.getIframe === 'function' && playerRef.current.getIframe()) {
+                        playerRef.current.seekTo(seconds, true);
+                    }
+                } catch (e) {}
             }
         }
         prevSetRef.current = currentSet;
@@ -562,29 +654,40 @@ function CockpitAnalysisContent() {
     useEffect(() => {
         const interval = setInterval(() => {
             if (!playerRef.current) return;
-            const curr = playerRef.current.getCurrentTime();
-            setActiveTime(Math.floor(curr)); 
-            if (playerRef.current.getPlayerState() === 1) { // Playing
-                accumulatedSessionTimeRef.current += 0.15;
-                if (accumulatedSessionTimeRef.current >= 30) {
-                    updatePlayTime(Math.floor(accumulatedSessionTimeRef.current));
-                    accumulatedSessionTimeRef.current = 0;
-                }
-            }
-
-            if (activeLoop && playerRef.current.getPlayerState() === 1) {
-                if (curr >= activeLoop.end - 0.1) {
-                    if (isSequentialRally) {
-                        const activeRallies = logs.filter(l => l.set_number === currentSet && selectedIndices[l.id] && rallyLoops[l.id]?.end);
-                        if (activeRallies.length > 0) {
-                            const nextIdx = (sequentialRallyIndex + 1) % activeRallies.length;
-                            setSequentialRallyIndex(nextIdx);
-                            startRallyLoop(activeRallies[nextIdx], true);
-                        } else { setActiveLoop(null); setIsSequentialRally(false); }
-                    } else if (isIndividualLooping) {
-                        playerRef.current.seekTo(activeLoop.start);
+            try {
+                // EXTREMELY DEFENSIVE: Check if player and its iframe still exist
+                if (typeof playerRef.current.getIframe !== 'function' || !playerRef.current.getIframe()) return;
+                if (typeof playerRef.current.getCurrentTime !== 'function') return;
+                
+                const curr = playerRef.current.getCurrentTime();
+                setActiveTime(Math.floor(curr)); 
+                
+                if (typeof playerRef.current.getPlayerState === 'function' && playerRef.current.getPlayerState() === 1) { // Playing
+                    accumulatedSessionTimeRef.current += 0.15;
+                    if (accumulatedSessionTimeRef.current >= 30) {
+                        updatePlayTime(Math.floor(accumulatedSessionTimeRef.current));
+                        accumulatedSessionTimeRef.current = 0;
                     }
                 }
+
+                if (activeLoop && typeof playerRef.current.getPlayerState === 'function' && playerRef.current.getPlayerState() === 1) {
+                    if (curr >= activeLoop.end - 0.1) {
+                        if (isSequentialRally) {
+                            const activeRallies = logs.filter(l => l.set_number === currentSet && selectedIndices[l.id] && rallyLoops[l.id]?.end);
+                            if (activeRallies.length > 0) {
+                                const nextIdx = (sequentialRallyIndex + 1) % activeRallies.length;
+                                setSequentialRallyIndex(nextIdx);
+                                startRallyLoop(activeRallies[nextIdx], true);
+                            } else { setActiveLoop(null); setIsSequentialRally(false); }
+                        } else if (isIndividualLooping) {
+                            if (typeof playerRef.current.getIframe === 'function' && playerRef.current.getIframe()) {
+                                playerRef.current.seekTo(activeLoop.start);
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn("YouTube Player polling error:", e);
             }
         }, 150);
         return () => {
@@ -701,12 +804,12 @@ function CockpitAnalysisContent() {
     };
 
     const recordPoint = async (isMe: boolean, type: string) => {
-        const sanitizedId = String(matchId || "").trim();
+            const sanitizedId = String(matchId || "").trim();
         if (!sanitizedId) return;
 
         try {
             let timestamp = 0;
-            if (playerRef.current && typeof playerRef.current.getCurrentTime === 'function') {
+            if (playerRef.current && typeof playerRef.current.getIframe === 'function' && playerRef.current.getIframe()) {
                 try {
                     timestamp = Math.floor(playerRef.current.getCurrentTime());
                 } catch (e) {
@@ -714,19 +817,32 @@ function CockpitAnalysisContent() {
                 }
             }
 
-            const currentSetLogs = logs.filter(l => l.set_number === currentSet).sort((a, b) => Number(a.video_timestamp || 0) - Number(b.video_timestamp || 0));
-            const lastLog = currentSetLogs[currentSetLogs.length - 1];
+            // Get the very latest log from DB for this set to ensure accurate prevTimestamp
+            const { data: latestLogs } = await supabase.from('bd_point_logs')
+                .select('video_timestamp')
+                .eq('match_id', sanitizedId)
+                .eq('set_number', currentSet)
+                .order('video_timestamp', { ascending: false })
+                .limit(1);
             
-            let prevTimestamp = 0;
-            if (lastLog) {
-                prevTimestamp = lastLog.video_timestamp;
+            const lastLogTimestamp = latestLogs && latestLogs.length > 0 ? latestLogs[0].video_timestamp : null;
+            
+            let rallyStart = 0;
+            const rallyEnd = timestamp;
+
+            if (lastLogTimestamp !== null) {
+                // 원칙: 이전 점수 기록 후 +10초가 시작점
+                rallyStart = lastLogTimestamp + 10;
             } else {
-                const startTimeStr = match[`set_${currentSet}_start`];
-                prevTimestamp = parseTimeToSeconds(startTimeStr) - 5;
+                // 첫 득점인 경우 세트 시작 시간에서 시작
+                const startTimeStr = match[`set_${currentSet}_start`] || '00:00';
+                rallyStart = parseTimeToSeconds(startTimeStr);
             }
 
-            const rallyStart = prevTimestamp + 5;
-            const rallyEnd = timestamp;
+            // 방어 로직: 시작 시간이 종료 시간보다 늦거나 같으면 종료 시간 5초 전으로 설정
+            if (rallyStart >= rallyEnd) {
+                rallyStart = Math.max(0, rallyEnd - 5);
+            }
 
             const { data: newLog, error: pErr } = await supabase.from('bd_point_logs').insert({
                 match_id: sanitizedId, 
@@ -757,8 +873,10 @@ function CockpitAnalysisContent() {
             }
 
             // Skip Dead Time: Jump 5 seconds ahead
-            if (playerRef.current) {
-                playerRef.current.seekTo(timestamp + 5, true);
+            if (playerRef.current && typeof playerRef.current.getIframe === 'function' && playerRef.current.getIframe()) {
+                if (typeof playerRef.current.seekTo === 'function') {
+                    playerRef.current.seekTo(timestamp + 5, true);
+                }
             }
 
             if (newLog) {
@@ -869,16 +987,18 @@ function CockpitAnalysisContent() {
         const end = bounds?.end || 0;
         
         if (!end) { 
-            if (playerRef.current && typeof playerRef.current.seekTo === 'function') playerRef.current.seekTo(start); 
+            if (playerRef.current && typeof playerRef.current.getIframe === 'function' && playerRef.current.getIframe()) {
+                if (typeof playerRef.current.seekTo === 'function') playerRef.current.seekTo(start); 
+            }
             return; 
         }
         if (!sequential && activeLoop && activeLoop.id === log.id) { setActiveLoop(null); setIsSequentialRally(false); return; }
         
         setActiveLoop({ id: log.id, start, end });
-        if (playerRef.current && typeof playerRef.current.seekTo === 'function') {
+        if (playerRef.current && typeof playerRef.current.getIframe === 'function' && playerRef.current.getIframe()) {
             try {
-                playerRef.current.seekTo(start);
-                playerRef.current.playVideo();
+                if (typeof playerRef.current.seekTo === 'function') playerRef.current.seekTo(start);
+                if (typeof playerRef.current.playVideo === 'function') playerRef.current.playVideo();
             } catch (e) { console.warn("Player not fully ready", e); }
         }
     };
@@ -889,41 +1009,42 @@ function CockpitAnalysisContent() {
         setIsSequentialRally(true); setSequentialRallyIndex(0); startRallyLoop(activeRallies[0], true);
     };
 
-    // AUTO START WINS ON INITIAL LOAD
     useEffect(() => {
         if (!hasAutoStarted && isPlayerReady && match && playerRef.current) {
-            const startTimeStr = match[`set_${currentSet}_start`] || '00:00';
-            const startTime = parseTimeToSeconds(startTimeStr);
+            try {
+                const startTimeStr = match[`set_${currentSet}_start`] || '00:00';
+                const startTime = parseTimeToSeconds(startTimeStr);
 
-            // 1. 영상 위치를 시작 시간으로 이동
-            if (typeof playerRef.current.seekTo === 'function') {
-                try {
-                    playerRef.current.seekTo(startTime, true);
-                    setHasAutoStarted(true);
-                } catch (e) {
-                    console.warn("Initial seek failed", e);
+                // 1. 영상 위치를 시작 시간으로 이동
+                if (typeof playerRef.current.getIframe === 'function' && playerRef.current.getIframe()) {
+                    if (typeof playerRef.current.seekTo === 'function') {
+                        playerRef.current.seekTo(startTime, true);
+                        setHasAutoStarted(true);
+                        console.log(`Auto-started at ${startTimeStr} for Set ${currentSet}`);
+                    }
                 }
-            }
 
-            // 2. 득점 로그가 있다면 득점 모드(Wins)를 활성화하여 UI 강조
-            if (logs.length > 0) {
-                const currentSetLogs = logs.filter(l => Number(l.set_number) === Number(currentSet));
-                const next: Record<string, boolean> = { ...selectedIndices };
-                let hasWins = false;
-                
-                currentSetLogs.forEach(l => {
-                    next[l.id] = l.is_my_point;
-                    if (l.is_my_point && rallyLoops[l.id]?.end) hasWins = true;
-                });
-                
-                setSelectedIndices(next);
-                setPlaybackMode('wins');
-                
-                if (hasWins) {
-                    setIsSequentialRally(true);
-                    setSequentialRallyIndex(0);
-                    // 자동 재생 점프(startRallyLoop)는 1세트 시작 지점 유지를 위해 생략
+                // 2. 득점 로그가 있다면 득점 모드(Wins)를 활성화하여 UI 강조
+                if (logs.length > 0) {
+                    const currentSetLogs = logs.filter(l => Number(l.set_number) === Number(currentSet));
+                    const next: Record<string, boolean> = { ...selectedIndices };
+                    let hasWins = false;
+                    
+                    currentSetLogs.forEach(l => {
+                        next[l.id] = l.is_my_point;
+                        if (l.is_my_point && rallyLoops[l.id]?.end) hasWins = true;
+                    });
+                    
+                    setSelectedIndices(next);
+                    setPlaybackMode('wins');
+                    
+                    if (hasWins) {
+                        setIsSequentialRally(true);
+                        setSequentialRallyIndex(0);
+                    }
                 }
+            } catch (e) {
+                console.warn("Initial auto-start failed:", e);
             }
         }
     }, [isPlayerReady, logs, hasAutoStarted, currentSet, rallyLoops, match]);
@@ -1083,12 +1204,8 @@ function CockpitAnalysisContent() {
                         <YoutubePlayer 
                             key={match?.youtube_video_id || 'no-video'}
                             videoId={match?.youtube_video_id || ''} 
-                            onPlayerReady={(p) => { 
-                                if (p) {
-                                    playerRef.current = p; 
-                                    setIsPlayerReady(true); 
-                                }
-                            }} 
+                            onPlayerReady={handlePlayerReady} 
+                            onStateChange={handlePlayerStateChange}
                         />
                         
                         {/* Playback Mode Indicators */}
@@ -1218,12 +1335,20 @@ function CockpitAnalysisContent() {
                                         </div>
                                         <div className="flex items-center gap-2 shrink-0 bg-black/50 p-2 rounded-2xl border border-white/10 shadow-lg">
                                             <div className="flex flex-col items-center gap-1">
-                                                <button onClick={() => setRallyBound(l.id, 'start', playerRef.current?.getCurrentTime() || 0)} className={cn("px-4 py-1.5 rounded-xl font-black text-[11px] transition-all shadow-md", loop?.start ? "bg-cyan-500 text-white shadow-cyan-500/30" : "bg-white/5 text-white/30 hover:text-white hover:bg-white/10")}>A</button>
-                                                <span className="text-[9px] font-black text-cyan-400/90 tabular-nums">{loop?.start ? formatTime(loop.start) : '--:--'}</span>
+                                                <button onClick={() => {
+                                                    if (playerRef.current && typeof playerRef.current.getIframe === 'function' && playerRef.current.getIframe()) {
+                                                        setRallyBound(l.id, 'start', playerRef.current.getCurrentTime());
+                                                    }
+                                                }} className={cn("px-4 py-1.5 rounded-xl font-black text-[11px] transition-all shadow-md", (loop?.start !== undefined) ? "bg-cyan-500 text-white shadow-cyan-500/30" : "bg-white/5 text-white/30 hover:text-white hover:bg-white/10")}>A</button>
+                                                <span className="text-[9px] font-black text-cyan-400/90 tabular-nums">{(loop?.start !== undefined) ? formatTime(loop.start) : '--:--'}</span>
                                             </div>
                                             <div className="flex flex-col items-center gap-1">
-                                                <button onClick={() => setRallyBound(l.id, 'end', playerRef.current?.getCurrentTime() || 0)} className={cn("px-4 py-1.5 rounded-xl font-black text-[11px] transition-all shadow-md", loop?.end ? "bg-rose-600 text-white shadow-rose-600/30" : "bg-white/5 text-white/30 hover:text-white hover:bg-white/10")}>B</button>
-                                                <span className="text-[9px] font-black text-rose-500/90 tabular-nums">{loop?.end ? formatTime(loop.end) : '--:--'}</span>
+                                                <button onClick={() => {
+                                                    if (playerRef.current && typeof playerRef.current.getIframe === 'function' && playerRef.current.getIframe()) {
+                                                        setRallyBound(l.id, 'end', playerRef.current.getCurrentTime());
+                                                    }
+                                                }} className={cn("px-4 py-1.5 rounded-xl font-black text-[11px] transition-all shadow-md", (loop?.end !== undefined) ? "bg-rose-600 text-white shadow-rose-600/30" : "bg-white/5 text-white/30 hover:text-white hover:bg-white/10")}>B</button>
+                                                <span className="text-[9px] font-black text-rose-500/90 tabular-nums">{(loop?.end !== undefined) ? formatTime(loop.end) : '--:--'}</span>
                                             </div>
                                             <div className="flex flex-col gap-0.5 ml-1 border-l border-white/10 pl-1.5">
                                                 <button onClick={() => setEditingLog({ id: l.id, type: l.point_type, is_my_point: l.is_my_point, set_number: l.set_number })} className="p-1.5 text-white/20 hover:text-blue-400 transition-all opacity-0 group-hover/row:opacity-100 hover:scale-110" title="유형 수정"><SquarePen className="w-3.5 h-3.5" /></button>

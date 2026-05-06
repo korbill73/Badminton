@@ -7,7 +7,7 @@ import {
     BarChart, Bar, XAxis as BarXAxis, YAxis as BarYAxis
 } from 'recharts';
 import { BDPointLog } from '@/types';
-import { Target, AlertTriangle, Trophy, Target as TargetIcon, TrendingUp, Zap, Server } from 'lucide-react';
+import { Target, AlertTriangle, Trophy, Target as TargetIcon, TrendingUp, Zap, Server, Clock, Play, Video } from 'lucide-react';
 
 interface CategoryGroup {
     group: string;
@@ -19,13 +19,14 @@ interface SetDashboardProps {
     setNumber: number;
     winCats: CategoryGroup[];
     lossCats: CategoryGroup[];
+    matchMeta?: any;
 }
 
 const COLORS_WIN = ['#00d2ff', '#3a7bd5', '#7f00ff', '#e100ff', '#ff00cc', '#ff0066', '#ff4b2b', '#ff416c'];
 const COLORS_LOSS = ['#ff4b2b', '#ff416c', '#f7971e', '#ffd200', '#91ff00', '#00ff88', '#00dbde', '#fc00ff'];
 const COLORS_PRIMARY = ['#60a5fa', '#f87171', '#34d399', '#fbbf24', '#a78bfa', '#f472b6', '#22d3ee', '#38bdf8'];
 
-export default function SetDashboard({ logs, setNumber, winCats, lossCats }: SetDashboardProps) {
+export default function SetDashboard({ logs, setNumber, winCats, lossCats, matchMeta }: SetDashboardProps) {
 
     const flowData = useMemo(() => {
         let meTotal = 0;
@@ -77,6 +78,22 @@ export default function SetDashboard({ logs, setNumber, winCats, lossCats }: Set
 
     const topWinTechniques = winData.slice(0, 7);
     const topLossReasons = lossData.slice(0, 7);
+
+    // Rally Duration Sum
+    const totalRallyTime = useMemo(() => {
+        const rallyLoops = matchMeta?.rallyLoopsV2 || {};
+        return logs.reduce((acc, l) => {
+            const loop = rallyLoops[l.id];
+            if (loop?.end) return acc + (loop.end - (loop.start || l.video_timestamp));
+            return acc;
+        }, 0);
+    }, [logs, matchMeta]);
+
+    const formatDuration = (seconds: number) => {
+        const m = Math.floor(seconds / 60);
+        const s = Math.floor(seconds % 60);
+        return `${m}분 ${s}초`;
+    };
 
     const analysisText = useMemo(() => {
         if (logs.length < 5) return { strength: '데이터 수집 중', weakness: '데이터 수집 중' };
@@ -145,6 +162,54 @@ export default function SetDashboard({ logs, setNumber, winCats, lossCats }: Set
                 <Trophy className="w-6 h-6 md:w-8 md:h-8 text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]" />
                 <h2 className="text-xl md:text-3xl font-black text-white tracking-widest drop-shadow-sm">{setNumber === 0 ? '전체 세트' : `${setNumber}세트`} 정밀 리포트</h2>
                 <span className="hidden md:inline-block text-[12px] font-black text-blue-300 ml-4 uppercase tracking-widest bg-blue-500/10 border border-blue-500/20 px-4 py-1.5 rounded-full">Automated Insight</span>
+            </div>
+
+            {/* Premium Stats Summary */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-[#0b1221] border border-white/5 p-6 rounded-[2rem] shadow-xl flex flex-col gap-1">
+                    <div className="flex items-center gap-2 text-blue-400/60 mb-1">
+                        <Video className="w-4 h-4" />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Total Watch Time</span>
+                    </div>
+                    <div className="flex items-baseline gap-1">
+                        <span className="text-2xl font-black text-white tabular-nums">{Math.floor((matchMeta?.stats?.view_duration || 0) / 60)}</span>
+                        <span className="text-xs font-black text-white/40 uppercase">min</span>
+                        <span className="text-2xl font-black text-white tabular-nums ml-2">{(matchMeta?.stats?.view_duration || 0) % 60}</span>
+                        <span className="text-xs font-black text-white/40 uppercase">sec</span>
+                    </div>
+                </div>
+                <div className="bg-[#0b1221] border border-white/5 p-6 rounded-[2rem] shadow-xl flex flex-col gap-1">
+                    <div className="flex items-center gap-2 text-cyan-400/60 mb-1">
+                        <Play className="w-4 h-4" />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Total Views</span>
+                    </div>
+                    <div className="flex items-baseline gap-1">
+                        <span className="text-3xl font-black text-cyan-400 tabular-nums">{matchMeta?.stats?.view_count || 0}</span>
+                        <span className="text-xs font-black text-white/40 uppercase ml-1">sessions</span>
+                    </div>
+                </div>
+                <div className="bg-[#0b1221] border border-white/5 p-6 rounded-[2rem] shadow-xl flex flex-col gap-1">
+                    <div className="flex items-center gap-2 text-yellow-400/60 mb-1">
+                        <Clock className="w-4 h-4" />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Analyzed Rally Time</span>
+                    </div>
+                    <div className="flex items-baseline gap-1">
+                        <span className="text-2xl font-black text-yellow-400 tabular-nums">{Math.floor(totalRallyTime / 60)}</span>
+                        <span className="text-xs font-black text-white/40 uppercase">min</span>
+                        <span className="text-2xl font-black text-yellow-400 tabular-nums ml-2">{Math.floor(totalRallyTime % 60)}</span>
+                        <span className="text-xs font-black text-white/40 uppercase">sec</span>
+                    </div>
+                </div>
+                <div className="bg-[#0b1221] border border-white/5 p-6 rounded-[2rem] shadow-xl flex flex-col gap-1">
+                    <div className="flex items-center gap-2 text-rose-500/60 mb-1">
+                        <Target className="w-4 h-4" />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Recorded Points</span>
+                    </div>
+                    <div className="flex items-baseline gap-1">
+                        <span className="text-3xl font-black text-white tabular-nums">{logs.length}</span>
+                        <span className="text-xs font-black text-white/40 uppercase ml-1">points</span>
+                    </div>
+                </div>
             </div>
 
             {/* Smart Summary Cards */}

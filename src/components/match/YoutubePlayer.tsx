@@ -6,6 +6,7 @@ import YouTube, { YouTubeProps } from 'react-youtube';
 interface YoutubePlayerProps {
     videoId: string;
     onPlayerReady: (player: any) => void;
+    onStateChange?: (event: any) => void;
 }
 
 /**
@@ -22,7 +23,7 @@ function extractVideoId(input: string): string {
     return match ? match[1] : input;
 }
 
-export default function YoutubePlayer({ videoId, onPlayerReady }: YoutubePlayerProps) {
+export default function YoutubePlayer({ videoId, onPlayerReady, onStateChange }: YoutubePlayerProps) {
     const cleanVideoId = extractVideoId(videoId);
 
     const opts = React.useMemo<YouTubeProps['opts']>(() => ({
@@ -49,6 +50,7 @@ export default function YoutubePlayer({ videoId, onPlayerReady }: YoutubePlayerP
                     videoId={cleanVideoId}
                     opts={opts}
                     onReady={onReady}
+                    onStateChange={onStateChange}
                     className="w-full h-full"
                     iframeClassName="w-full h-full"
                 />
