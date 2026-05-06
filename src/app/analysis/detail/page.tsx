@@ -731,13 +731,19 @@ function CockpitAnalysisContent() {
 
                 // Rally Loop / Sequence Logic
                 if (cLoop && playerState === 1) {
-                    // Precise end detection with small buffer (0.3s for mobile stability)
-                    if (curr >= cLoop.end - 0.3) {
+                    // Precise end detection with small buffer (0.2s for mobile stability)
+                    if (curr >= cLoop.end - 0.2) {
                         if (cSeq) {
                             const activeRallies = cLogs.filter(l => l.set_number === cSet && cSel[l.id] && cLoops[l.id]?.end);
                             if (activeRallies.length > 0) {
-                                // Find next index logically
-                                const nextIdx = (cIdx + 1) % activeRallies.length;
+                                // CRITICAL: Clear activeLoop immediately in the state to prevent multiple triggers 
+                                // before the next render cycle updates stateRef.
+                                setActiveLoop(null);
+
+                                // Find current index by ID instead of relying on state index which might be stale
+                                const currentIdx = activeRallies.findIndex(r => r.id === cLoop.id);
+                                const nextIdx = (currentIdx + 1) % activeRallies.length;
+                                
                                 setSequentialRallyIndex(nextIdx);
                                 startRallyLoop(activeRallies[nextIdx], true);
                             } else { 
@@ -745,7 +751,7 @@ function CockpitAnalysisContent() {
                                 setIsSequentialRally(false); 
                             }
                         } else if (cIndiv) {
-                            // Single loop
+                            // Single loop - seek back to start
                             playerRef.current.seekTo(cLoop.start, true);
                         }
                     }
