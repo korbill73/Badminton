@@ -669,52 +669,93 @@ function CockpitAnalysisContent() {
         prevSetRef.current = currentSet;
     }, [currentSet, match, isPlayerReady]);
 
+    // Use refs to avoid interval restarts on every state change
+    const stateRef = useRef({
+        activeLoop,
+        isSequentialRally,
+        sequentialRallyIndex,
+        logs,
+        rallyLoops,
+        currentSet,
+        selectedIndices,
+        isIndividualLooping
+    });
+
+    useEffect(() => {
+        stateRef.current = {
+            activeLoop,
+            isSequentialRally,
+            sequentialRallyIndex,
+            logs,
+            rallyLoops,
+            currentSet,
+            selectedIndices,
+            isIndividualLooping
+        };
+    }, [activeLoop, isSequentialRally, sequentialRallyIndex, logs, rallyLoops, currentSet, selectedIndices, isIndividualLooping]);
+
     useEffect(() => {
         const interval = setInterval(() => {
-            if (!playerRef.current) return;
+            if (!playerRef.current || !isMountedRef.current) return;
             try {
-                // EXTREMELY DEFENSIVE: Check if player and its iframe still exist
+                const { 
+                    activeLoop: cLoop, 
+                    isSequentialRally: cSeq, 
+                    sequentialRallyIndex: cIdx, 
+                    logs: cLogs, 
+                    rallyLoops: cLoops, 
+                    currentSet: cSet, 
+                    selectedIndices: cSel, 
+                    isIndividualLooping: cIndiv 
+                } = stateRef.current;
+
                 if (typeof playerRef.current.getIframe !== 'function' || !playerRef.current.getIframe()) return;
-                if (typeof playerRef.current.getCurrentTime !== 'function') return;
                 
                 const curr = playerRef.current.getCurrentTime();
                 setActiveTime(Math.floor(curr)); 
                 
-                if (typeof playerRef.current.getPlayerState === 'function' && playerRef.current.getPlayerState() === 1) { // Playing
-                    accumulatedSessionTimeRef.current += 0.15;
+                const playerState = typeof playerRef.current.getPlayerState === 'function' ? playerRef.current.getPlayerState() : -1;
+                
+                if (playerState === 1) { // Playing
+                    accumulatedSessionTimeRef.current += 0.1;
                     if (accumulatedSessionTimeRef.current >= 30) {
                         updatePlayTime(Math.floor(accumulatedSessionTimeRef.current));
                         accumulatedSessionTimeRef.current = 0;
                     }
                 }
 
-                if (activeLoop && typeof playerRef.current.getPlayerState === 'function' && playerRef.current.getPlayerState() === 1) {
-                    if (curr >= activeLoop.end - 0.1) {
-                        if (isSequentialRally) {
-                            const activeRallies = logs.filter(l => l.set_number === currentSet && selectedIndices[l.id] && rallyLoops[l.id]?.end);
+                // Rally Loop / Sequence Logic
+                if (cLoop && playerState === 1) {
+                    // Precise end detection with small buffer (0.3s for mobile stability)
+                    if (curr >= cLoop.end - 0.3) {
+                        if (cSeq) {
+                            const activeRallies = cLogs.filter(l => l.set_number === cSet && cSel[l.id] && cLoops[l.id]?.end);
                             if (activeRallies.length > 0) {
-                                const nextIdx = (sequentialRallyIndex + 1) % activeRallies.length;
+                                // Find next index logically
+                                const nextIdx = (cIdx + 1) % activeRallies.length;
                                 setSequentialRallyIndex(nextIdx);
                                 startRallyLoop(activeRallies[nextIdx], true);
-                            } else { setActiveLoop(null); setIsSequentialRally(false); }
-                        } else if (isIndividualLooping) {
-                            if (typeof playerRef.current.getIframe === 'function' && playerRef.current.getIframe()) {
-                                playerRef.current.seekTo(activeLoop.start);
+                            } else { 
+                                setActiveLoop(null); 
+                                setIsSequentialRally(false); 
                             }
+                        } else if (cIndiv) {
+                            // Single loop
+                            playerRef.current.seekTo(cLoop.start, true);
                         }
                     }
                 }
             } catch (e) {
-                console.warn("YouTube Player polling error:", e);
+                // Silent catch for polling
             }
-        }, 150);
+        }, 100); // Higher frequency (100ms) for better precision
         return () => {
             clearInterval(interval);
             if (accumulatedSessionTimeRef.current > 0) {
                 updatePlayTime(Math.floor(accumulatedSessionTimeRef.current));
             }
         };
-    }, [activeLoop, isSequentialRally, sequentialRallyIndex, logs, rallyLoops, currentSet, selectedIndices, isIndividualLooping]);
+    }, []); // Empty dependency array - relies on stateRef
 
     useEffect(() => {
         const handleUnload = () => {
