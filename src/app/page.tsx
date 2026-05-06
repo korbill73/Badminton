@@ -318,7 +318,7 @@ export default function Dashboard() {
                     <div className="bg-[#0b1221] p-8 md:p-10 rounded-[2.5rem] border border-white/5 hover:border-emerald-500/40 transition-all shadow-xl group">
                         <div className="flex items-center gap-4 mb-6">
                             <div className="p-3 bg-emerald-600/10 rounded-xl border border-emerald-500/20"><Zap className="w-6 h-6 text-emerald-500" /></div>
-                            <h4 className="text-xl md:text-2xl font-black text-white italic tracking-tight">프로 분석실 (고등부)</h4>
+                            <h4 className="text-xl md:text-2xl font-black text-white italic tracking-tight">우수 선수 분석 (고등부)</h4>
                         </div>
                         <div className="space-y-6">
                             <div className="flex justify-between items-end border-b border-white/5 pb-4">
@@ -339,7 +339,7 @@ export default function Dashboard() {
                     <div className="bg-[#0b1221] p-8 md:p-10 rounded-[2.5rem] border border-white/5 hover:border-purple-500/40 transition-all shadow-xl group">
                         <div className="flex items-center gap-4 mb-6">
                             <div className="p-3 bg-purple-600/10 rounded-xl border border-purple-500/20"><Target className="w-6 h-6 text-purple-500" /></div>
-                            <h4 className="text-xl md:text-2xl font-black text-white italic tracking-tight">프로 분석실 (프로)</h4>
+                            <h4 className="text-xl md:text-2xl font-black text-white italic tracking-tight">우수 선수 분석 (프로)</h4>
                         </div>
                         <div className="space-y-6">
                             <div className="flex justify-between items-end border-b border-white/5 pb-4">

@@ -24,9 +24,9 @@ export default function Navbar() {
     const menuItems = [
         { name: '대시보드', icon: LayoutDashboard, href: '/' },
         { name: '경기 기록', icon: Trophy, href: '/tournaments' },
+        { name: '우수 선수 분석', icon: Search, href: '/pro-archive' },
         { name: '선수 관리', icon: Users2, href: '/players' },
         { name: '트레이닝 지표', icon: BarChart3, href: '/performance' },
-        { name: '프로 분석실', icon: Search, href: '/pro-archive' },
         { name: '데이터 백업', icon: Database, href: '/backup' },
         { name: '시스템 매뉴얼', icon: BookOpen, href: '/guide' }
     ];

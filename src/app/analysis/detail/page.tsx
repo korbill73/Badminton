@@ -1093,15 +1093,14 @@ function CockpitAnalysisContent() {
     }, [activeLoop]);
 
     const cSetLogs = useMemo(() => {
-        const filtered = logs.filter(l => Number(l.set_number) === Number(currentSet));
-        return [...filtered].sort((a,b) => {
-            const tA = Number(a.video_timestamp || 0);
-            const tB = Number(b.video_timestamp || 0);
-            if (tA !== tB) return tA - tB;
-            const dA = new Date(a.created_at).getTime();
-            const dB = new Date(b.created_at).getTime();
-            return dA - dB;
-        });
+        return [...logs]
+            .filter(l => Number(l.set_number) === Number(currentSet))
+            .sort((a, b) => {
+                const timeA = parseTimeToSeconds(a.video_timestamp);
+                const timeB = parseTimeToSeconds(b.video_timestamp);
+                if (timeA !== timeB) return timeA - timeB;
+                return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+            });
     }, [logs, currentSet]);
 
     const [sMe, sOpp] = useMemo(() => {
