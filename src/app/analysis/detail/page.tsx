@@ -438,6 +438,7 @@ function CockpitAnalysisContent() {
     const logListRef = useRef<HTMLDivElement>(null);
     const hasJumpedToStartRef = useRef(false);
     const isMountedRef = useRef(true);
+    const isTransitioningRef = useRef(false);
 
     useEffect(() => {
         isMountedRef.current = true;
@@ -674,46 +675,16 @@ function CockpitAnalysisContent() {
         prevSetRef.current = currentSet;
     }, [currentSet, match, isPlayerReady]);
 
-    // Use refs to avoid interval restarts on every state change
-    const stateRef = useRef({
-        activeLoop,
-        isSequentialRally,
-        sequentialRallyIndex,
-        logs,
-        rallyLoops,
-        currentSet,
-        selectedIndices,
-        isIndividualLooping
-    });
-
     useEffect(() => {
-        stateRef.current = {
-            activeLoop,
-            isSequentialRally,
-            sequentialRallyIndex,
-            logs,
-            rallyLoops,
-            currentSet,
-            selectedIndices,
-            isIndividualLooping
-        };
-    }, [activeLoop, isSequentialRally, sequentialRallyIndex, logs, rallyLoops, currentSet, selectedIndices, isIndividualLooping]);
+        // Reset transitioning flag when activeLoop changes
+        isTransitioningRef.current = false;
+    }, [activeLoop?.id]);
 
     useEffect(() => {
         const interval = setInterval(() => {
-            if (!playerRef.current || !isMountedRef.current) return;
+            if (!playerRef.current || !isMountedRef.current || isTransitioningRef.current) return;
+            
             try {
-                const { 
-                    activeLoop: cLoop, 
-                    isSequentialRally: cSeq, 
-                    sequentialRallyIndex: cIdx, 
-                    logs: cLogs, 
-                    rallyLoops: cLoops, 
-                    currentSet: cSet, 
-                    selectedIndices: cSel, 
-                    isIndividualLooping: cIndiv 
-                } = stateRef.current;
-
                 if (typeof playerRef.current.getIframe !== 'function' || !playerRef.current.getIframe()) return;
                 
                 const curr = playerRef.current.getCurrentTime();
@@ -730,18 +701,16 @@ function CockpitAnalysisContent() {
                 }
 
                 // Rally Loop / Sequence Logic
-                if (cLoop && playerState === 1) {
-                    // Precise end detection with small buffer (0.2s for mobile stability)
-                    if (curr >= cLoop.end - 0.2) {
-                        if (cSeq) {
-                            const activeRallies = cLogs.filter(l => l.set_number === cSet && cSel[l.id] && cLoops[l.id]?.end);
+                if (activeLoop && playerState === 1) {
+                    // Check if we are at the end of the current rally
+                    if (curr >= activeLoop.end - 0.2) {
+                        if (isSequentialRally) {
+                            const activeRallies = logs.filter(l => l.set_number === currentSet && selectedIndices[l.id] && rallyLoops[l.id]?.end);
                             if (activeRallies.length > 0) {
-                                // CRITICAL: Clear activeLoop immediately in the state to prevent multiple triggers 
-                                // before the next render cycle updates stateRef.
-                                setActiveLoop(null);
-
-                                // Find current index by ID instead of relying on state index which might be stale
-                                const currentIdx = activeRallies.findIndex(r => r.id === cLoop.id);
+                                // Set transition flag to prevent multiple triggers in one render cycle
+                                isTransitioningRef.current = true;
+                                
+                                const currentIdx = activeRallies.findIndex(r => r.id === activeLoop.id);
                                 const nextIdx = (currentIdx + 1) % activeRallies.length;
                                 
                                 setSequentialRallyIndex(nextIdx);
@@ -750,23 +719,17 @@ function CockpitAnalysisContent() {
                                 setActiveLoop(null); 
                                 setIsSequentialRally(false); 
                             }
-                        } else if (cIndiv) {
+                        } else if (isIndividualLooping) {
                             // Single loop - seek back to start
-                            playerRef.current.seekTo(cLoop.start, true);
+                            playerRef.current.seekTo(activeLoop.start, true);
                         }
                     }
                 }
-            } catch (e) {
-                // Silent catch for polling
-            }
-        }, 100); // Higher frequency (100ms) for better precision
-        return () => {
-            clearInterval(interval);
-            if (accumulatedSessionTimeRef.current > 0) {
-                updatePlayTime(Math.floor(accumulatedSessionTimeRef.current));
-            }
-        };
-    }, []); // Empty dependency array - relies on stateRef
+            } catch (e) { }
+        }, 100); 
+        
+        return () => clearInterval(interval);
+    }, [activeLoop, isSequentialRally, sequentialRallyIndex, logs, rallyLoops, currentSet, selectedIndices, isIndividualLooping]);
 
     useEffect(() => {
         const handleUnload = () => {
