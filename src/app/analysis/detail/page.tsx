@@ -178,7 +178,7 @@ const AnalysisMobileView = ({
     match, onClose, logs, activeLoop, isSequential, setIsSequential, 
     isAutoNext, setIsAutoNext, setSequentialIndex, startRallyLoop, 
     sequentialIndex, formatTime, isPlayerReady, setIsPlayerReady, playerRef, rallyLoops,
-    currentSet, setCurrentSet
+    currentSet, setCurrentSet, batchSelect, playbackMode
 }: any) => {
     if (!match) return null; // 방어 로직 추가
 
@@ -295,6 +295,12 @@ const AnalysisMobileView = ({
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         setActiveFilter(f);
+                                        
+                                        // Update parent selection for automatic transitions
+                                        if (f === '전체') batchSelect('all');
+                                        else if (f === '득점') batchSelect('wins');
+                                        else if (f === '실점') batchSelect('losses');
+
                                         const filtered = getFilteredLogs(f);
                                         if (filtered.length > 0) {
                                             setIsSequential(true);
@@ -329,14 +335,24 @@ const AnalysisMobileView = ({
                             <ChevronLeft className="w-5 h-5 landscape:w-4 h-4" />
                         </button>
                         <button 
-                            onClick={() => setIsAutoNext(!isAutoNext)}
+                            onClick={() => {
+                                if (isSequential) {
+                                    // If in sequence, switch to individual loop
+                                    setIsSequential(false);
+                                    setIsAutoNext(true);
+                                } else {
+                                    // If in individual loop, switch back to sequence
+                                    setIsSequential(true);
+                                    setIsAutoNext(false);
+                                }
+                            }}
                             className={cn(
                                 "px-4 py-3 landscape:py-1.5 rounded-xl font-black text-xs landscape:text-[8px] border transition-all flex-[2] flex items-center justify-center gap-2 landscape:gap-1 active:scale-95",
-                                isAutoNext ? "bg-emerald-600 border-emerald-400 text-white" : "bg-amber-600 border-amber-400 text-white"
+                                isSequential ? "bg-emerald-600 border-emerald-400 text-white" : "bg-amber-600 border-amber-400 text-white"
                             )}
                         >
-                            {isAutoNext ? <RefreshCcw className="w-4 h-4 landscape:w-3 h-3" /> : <RotateCcw className="w-4 h-4 landscape:w-3 h-3" />}
-                            {isAutoNext ? '전체' : '반복'}
+                            {isSequential ? <RefreshCcw className="w-4 h-4 landscape:w-3 h-3" /> : <RotateCcw className="w-4 h-4 landscape:w-3 h-3" />}
+                            {isSequential ? '전체 연속' : '현재 반복'}
                         </button>
                         <button 
                             onClick={() => {
@@ -1127,6 +1143,8 @@ function CockpitAnalysisContent() {
                     rallyLoops={rallyLoops}
                     currentSet={currentSet}
                     setCurrentSet={setCurrentSet}
+                    batchSelect={batchSelect}
+                    playbackMode={playbackMode}
                 />
             </ErrorBoundary>
         );
