@@ -197,6 +197,11 @@ const AnalysisMobileView = ({
 
     const onReady = (player: any) => {
         setIsPlayerReady(true);
+        // CRITICAL: Update the parent's playerRef so the control logic (setInterval) 
+        // in the parent can control this mobile player instance.
+        if (playerRef) {
+            playerRef.current = player;
+        }
     };
 
     const filters = ['전체', '득점', '실점'];
