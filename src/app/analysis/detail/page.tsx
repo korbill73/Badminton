@@ -180,6 +180,8 @@ const AnalysisMobileView = ({
     sequentialIndex, formatTime, isPlayerReady, setIsPlayerReady, playerRef, rallyLoops,
     currentSet, setCurrentSet
 }: any) => {
+    if (!match) return null; // 방어 로직 추가
+
     const [showControls, setShowControls] = useState(true);
     const [activeFilter, setActiveFilter] = useState('전체');
 
@@ -200,6 +202,7 @@ const AnalysisMobileView = ({
     const filters = ['전체', '득점', '실점'];
 
     const getFilteredLogs = (filter: string) => {
+        if (!logs || !Array.isArray(logs)) return [];
         if (filter === '전체') return logs;
         if (filter === '득점') return logs.filter((l: any) => l.is_my_point);
         if (filter === '실점') return logs.filter((l: any) => !l.is_my_point);
@@ -495,8 +498,7 @@ function CockpitAnalysisContent() {
                 if (mErr) {
                     console.error("Match fetch error:", mErr);
                     if (mErr.message?.includes('Failed to fetch') && retryCount < maxRetries) return false;
-                    // Do not alert if unmounted
-                    if (isMountedRef.current) alert(`❌ 매치 정보 로드 실패: ${mErr.message}`);
+                    if (isMountedRef.current) alert(`❌ 경기 정보 로드 실패 (네트워크 확인 필요): ${mErr.message || 'Unknown error'}\nURL: ${sanitizedId}`);
                     return true; 
                 }
                 
@@ -1097,28 +1099,36 @@ function CockpitAnalysisContent() {
 
     if (loading && !match) return <div className="h-screen bg-[#080d1a] flex items-center justify-center text-cyan-400 font-extrabold text-2xl animate-pulse italic uppercase tracking-tighter">PREPARING COMMAND CENTER...</div>;
 
-    if (isMobile && match) {
+    if (isMobile) {
+        if (!match) return <div className="h-screen bg-black flex flex-col items-center justify-center p-10 text-center">
+            <Loader2 className="w-10 h-10 text-blue-500 animate-spin mb-4" />
+            <p className="text-white font-black text-sm uppercase tracking-widest">Loading Match Data...</p>
+            <button onClick={() => window.location.reload()} className="mt-6 px-6 py-2 bg-white/10 text-white rounded-lg text-xs font-black">RETRY</button>
+        </div>;
+
         return (
-            <AnalysisMobileView 
-                match={match}
-                onClose={() => router.back()}
-                logs={cSetLogs}
-                activeLoop={activeLoop}
-                isSequential={isSequentialRally}
-                setIsSequential={setIsSequentialRally}
-                isAutoNext={isIndividualLooping}
-                setIsAutoNext={setIsIndividualLooping}
-                setSequentialIndex={setSequentialRallyIndex}
-                startRallyLoop={startRallyLoop}
-                sequentialIndex={sequentialRallyIndex}
-                formatTime={formatTime}
-                isPlayerReady={isPlayerReady}
-                setIsPlayerReady={setIsPlayerReady}
-                playerRef={playerRef}
-                rallyLoops={rallyLoops}
-                currentSet={currentSet}
-                setCurrentSet={setCurrentSet}
-            />
+            <ErrorBoundary>
+                <AnalysisMobileView 
+                    match={match}
+                    onClose={() => router.back()}
+                    logs={cSetLogs}
+                    activeLoop={activeLoop}
+                    isSequential={isSequentialRally}
+                    setIsSequential={setIsSequentialRally}
+                    isAutoNext={isIndividualLooping}
+                    setIsAutoNext={setIsIndividualLooping}
+                    setSequentialIndex={setSequentialRallyIndex}
+                    startRallyLoop={startRallyLoop}
+                    sequentialIndex={sequentialRallyIndex}
+                    formatTime={formatTime}
+                    isPlayerReady={isPlayerReady}
+                    setIsPlayerReady={setIsPlayerReady}
+                    playerRef={playerRef}
+                    rallyLoops={rallyLoops}
+                    currentSet={currentSet}
+                    setCurrentSet={setCurrentSet}
+                />
+            </ErrorBoundary>
         );
     }
 
