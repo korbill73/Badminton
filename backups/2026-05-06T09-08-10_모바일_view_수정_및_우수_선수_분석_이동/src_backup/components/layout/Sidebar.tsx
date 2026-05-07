@@ -54,8 +54,7 @@ export default function Sidebar() {
                                 "flex items-center gap-4 px-6 py-4 rounded-2xl text-[15px] font-black tracking-tight transition-all duration-300 group relative overflow-hidden",
                                 isActive 
                                     ? "bg-blue-600/15 text-white shadow-[0_0_20px_rgba(37,99,235,0.1)]" 
-                                    : "text-white hover:bg-white/5 hover:pl-8",
-                                item.name === '데이터 백업' && "hidden md:flex"
+                                    : "text-white hover:bg-white/5 hover:pl-8"
                             )}
                         >
                             {/* Active Indicator Bar */}

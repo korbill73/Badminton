@@ -456,22 +456,16 @@ export default function ProArchiveMainPage() {
                                 incrementProMatchView(m.id, m.summary || '');
                             }} className="group relative bg-[#111827] rounded-2xl md:rounded-[3.2rem] p-4 md:px-10 md:py-7 transition-all duration-500 flex flex-col md:flex-row items-center border border-white/10 hover:border-blue-500 shadow-inner hover:scale-[1.012] cursor-pointer gap-4 md:gap-0">
                                 {/* Desktop Layout */}
-                                <div className="hidden md:flex w-[380px] shrink-0 border-r border-white/10 pr-6 items-center gap-4">
-                                    <span className="flex items-center gap-2 text-sky-400 font-black text-lg whitespace-nowrap"><Calendar className="w-4 h-4" /> {m.date?.replace(/^20/, '')}</span>
-                                    <span className="flex items-center gap-2 text-yellow-500 font-black text-lg whitespace-nowrap"><MapPin className="w-4 h-4" /> {m.location}</span>
-                                    <span className="flex items-center gap-2 text-white font-black text-sm line-clamp-1">{m.tournament}</span>
+                                <div className="hidden md:flex w-[410px] shrink-0 border-r border-white/10 pr-8 items-center gap-5">
+                                    <span className="flex items-center gap-2 text-sky-400 font-black text-xl"><Calendar className="w-4 h-4" /> {m.date}</span>
+                                    <span className="flex items-center gap-2 text-yellow-500 font-black text-xl"><MapPin className="w-4 h-4" /> {m.location}</span>
+                                    <span className="flex items-center gap-2 text-white font-black text-lg">{m.tournament}</span>
                                 </div>
                                 <div className="hidden md:flex flex-1 px-4 items-center justify-center min-w-0">
                                     <div className="flex items-center justify-center gap-6 w-full max-w-2xl">
-                                        <div className="flex-1 flex flex-col items-end justify-center min-w-0">
-                                            <span className={cn("font-black text-sky-400 text-right leading-tight", m.partner_name ? "text-xl" : "text-2xl")}>{m.player_name}</span>
-                                            {m.partner_name && <span className="text-sky-400/80 font-bold text-sm text-right mt-1">/ {m.partner_name}</span>}
-                                        </div>
+                                        <span className="flex-1 text-right font-black text-[24px] text-sky-400 truncate max-w-[300px]">{m.player_name}{m.partner_name && `/ ${m.partner_name}`}</span>
                                         <div className="px-5 py-2 bg-emerald-500/20 rounded-full border border-emerald-500 shrink-0"><span className="text-[11px] font-black italic text-emerald-300 tracking-widest uppercase">VS</span></div>
-                                        <div className="flex-1 flex flex-col items-start justify-center min-w-0">
-                                            <span className={cn("font-black text-yellow-400 text-left leading-tight", m.opponent_2_name ? "text-xl" : "text-2xl")}>{m.opponent}</span>
-                                            {m.opponent_2_name && <span className="text-yellow-400/80 font-bold text-sm text-left mt-1">/ {m.opponent_2_name}</span>}
-                                        </div>
+                                        <span className="flex-1 text-left font-black text-[24px] text-yellow-400 truncate max-w-[300px]">{m.opponent}{m.opponent_2_name && `/ ${m.opponent_2_name}`}</span>
                                     </div>
                                 </div>
                                 <div className="hidden md:flex flex-col items-center justify-center min-w-[180px] px-8 border-l border-white/10 group-hover:scale-105 transition-transform shrink-0">
@@ -482,7 +476,7 @@ export default function ProArchiveMainPage() {
                                         <Clock className="w-4 h-4" /> {formatDuration(parseStats(m.summary || '').view_duration)}
                                     </div>
                                 </div>
-                                    <div className="hidden md:flex w-[380px] shrink-0 items-center justify-end border-l border-white/10 pl-8 gap-6">
+                                    <div className="hidden md:flex w-[410px] shrink-0 items-center justify-end border-l border-white/10 pl-8 gap-6">
                                     <span className="text-5xl font-black text-yellow-400 tabular-nums">{m.score || '0:0'}</span>
                                     <div className="flex items-center gap-2 ml-4">
                                         <button onClick={(e) => { e.stopPropagation(); setEditingMatch(m); setIsMatchModalOpen(true); }} className="p-3 bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white rounded-2xl border border-blue-500/30"><Edit2 className="w-4 h-4" /></button>
@@ -495,7 +489,7 @@ export default function ProArchiveMainPage() {
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2">
                                             <Calendar className="w-3 h-3 text-sky-400" />
-                                            <span className="text-xs font-black text-sky-400">{m.date?.replace(/^20/, '')}</span>
+                                            <span className="text-xs font-black text-sky-400">{m.date}</span>
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <span className="text-lg font-black text-yellow-400 tabular-nums">{m.score || '0:0'}</span>

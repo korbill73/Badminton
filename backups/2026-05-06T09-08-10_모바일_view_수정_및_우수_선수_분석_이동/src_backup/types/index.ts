@@ -1,0 +1,108 @@
+export type BDCategoryType = 'singles' | 'doubles';
+export type BDMatchResultType = 'win' | 'loss';
+
+export type BDPointType =
+  | 'smash_winner'
+  | 'drop_winner'
+  | 'net_kill'
+  | 'drive_winner'
+  | 'hairpin_winner'
+  | 'clear_winner'
+  | 'push_winner'
+  | 'unforced_error'
+  | 'out_error'
+  | 'net_error'
+  | 'service_fault'
+  | 'receive_error'
+  | 'opponent_winner';
+
+export interface BDPlayer {
+  id: string;
+  name: string;
+  school_or_team?: string;
+  birth_year?: string;
+  elem_school?: string;
+  mid_school?: string;
+  high_school?: string;
+  univ_school?: string;
+  pro_team?: string;
+  created_at: string;
+}
+
+export interface BDTournament {
+  id: string;
+  name: string;
+  location?: string;
+  result?: string;
+  start_date?: string;
+  end_date?: string;
+  created_at: string;
+}
+
+export interface BDMatch {
+  id: string;
+  tournament_id: string;
+  match_name?: string;
+  match_date: string;
+  category: BDCategoryType;
+  partner_id?: string;
+  opponent_1_id: string;
+  opponent_2_id?: string;
+  my_set_score: number;
+  opponent_set_score: number;
+  match_result: BDMatchResultType;
+  youtube_video_id?: string;
+  set_2_start_time?: number; // Optional: for seeking to set 2 start
+  set_3_start_time?: number; // Optional: for seeking to set 3 start
+  feedback_notes?: string;
+  created_at: string;
+
+  // Joins
+  tournament?: BDTournament;
+  partner?: BDPlayer;
+  opponent_1?: BDPlayer;
+  opponent_2?: BDPlayer;
+  set_1_score_player?: number;
+  set_1_score_opponent?: number;
+  set_2_score_player?: number;
+  set_2_score_opponent?: number;
+  set_3_score_player?: number;
+  set_3_score_opponent?: number;
+}
+
+export interface BDPointLog {
+  id: string;
+  match_id: string;
+  set_number: number;
+  current_score: string;
+  is_my_point: boolean;
+  point_type: BDPointType | string;
+  reason?: string;
+  situation?: string;
+  rally_length?: string;
+  build_up_factor?: string;
+  video_timestamp?: number;
+  created_at: string;
+}
+
+export interface BDSetNote {
+  id: string;
+  match_id: string;
+  set_number: number;
+  content: string;
+  updated_at: string;
+  created_at: string;
+}
+
+// Chart Data Types
+export interface MomentumData {
+  rallyIndex: number;
+  scoreGap: number;
+  score: string;
+  isMyPoint: boolean;
+  pointType?: string;
+  reason?: string;
+  situation?: string;
+  rally_length?: string;
+  build_up_factor?: string;
+}

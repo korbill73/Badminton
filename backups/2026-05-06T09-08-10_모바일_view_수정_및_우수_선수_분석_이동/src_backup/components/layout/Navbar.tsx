@@ -53,8 +53,7 @@ export default function Navbar() {
                                 "flex items-center gap-2 px-3 md:px-5 py-2 rounded-xl text-xs md:text-sm font-bold transition-all shrink-0",
                                 isActive 
                                     ? "bg-white/10 text-white" 
-                                    : "text-slate-400 hover:text-white hover:bg-white/5",
-                                item.name === '데이터 백업' && "hidden md:flex"
+                                    : "text-slate-400 hover:text-white hover:bg-white/5"
                             )}
                             title={item.name}
                         >
