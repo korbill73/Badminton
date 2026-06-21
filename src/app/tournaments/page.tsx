@@ -484,7 +484,7 @@ export default function TournamentListPage() {
                                                         </div>
 
                                                         {/* PC Layout - Strict Grid Alignment with 9 columns */}
-                                                        <div className="hidden md:grid grid-cols-[64px_120px_30px_140px_50px_220px_70px_minmax(90px,1fr)_90px] xl:grid-cols-[64px_140px_30px_160px_60px_240px_80px_minmax(100px,1fr)_100px] items-center gap-2 xl:gap-4 w-full">
+                                                        <div className="hidden md:grid grid-cols-[64px_120px_30px_minmax(140px,2fr)_minmax(60px,1fr)_minmax(220px,3fr)_minmax(80px,1fr)_minmax(100px,2fr)_90px] xl:grid-cols-[64px_140px_30px_minmax(160px,2fr)_minmax(80px,1fr)_minmax(260px,3fr)_minmax(100px,1fr)_minmax(120px,2fr)_100px] items-center gap-2 xl:gap-4 w-full">
                                                             {/* 1. W/L */}
                                                             <div className="flex items-center justify-center">
                                                                 <div className={cn(
