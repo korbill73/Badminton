@@ -428,7 +428,7 @@ export default function TournamentListPage() {
                                                         incrementMatchView(m.id, m.feedback_notes);
                                                         router.push(`/analysis/detail?id=${m.id}`);
                                                     }}
-                                                    className="group relative bg-[#111827]/40 rounded-2xl md:rounded-[2.5rem] p-4 md:p-6 transition-all duration-700 flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-0 hover:bg-blue-600/[0.25] border border-blue-500/60 shadow-[0_0_20px_rgba(59,130,246,0.25)] hover:border-blue-400 hover:shadow-[0_0_60px_rgba(59,130,246,0.6)] md:hover:-translate-y-2 cursor-pointer overflow-hidden"
+                                                    className="group relative bg-[#111827]/40 rounded-2xl md:rounded-[2.5rem] p-4 md:px-6 md:py-3.5 transition-all duration-700 flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-0 hover:bg-blue-600/[0.25] border border-blue-500/60 shadow-[0_0_20px_rgba(59,130,246,0.25)] hover:border-blue-400 hover:shadow-[0_0_60px_rgba(59,130,246,0.6)] md:hover:-translate-y-2 cursor-pointer overflow-hidden"
                                                 >
                                                     <div className="absolute left-0 top-0 bottom-0 w-1 md:w-1.5 bg-blue-600 scale-y-0 group-hover:scale-y-100 transition-transform duration-500 origin-center shadow-[0_0_30px_rgba(37,99,235,0.9)]" />
                                                     
@@ -481,9 +481,9 @@ export default function TournamentListPage() {
                                                                 </div>
                                                             </div>
 
-                                                            {/* Names Section (PC) - Aligned Columns */}
+                                                            {/* Names Section (PC) - Symmetrical Alignment */}
                                                             <div className="hidden md:flex flex-row items-center gap-4 xl:gap-6 flex-1 overflow-hidden min-w-0">
-                                                                <div className="w-[140px] xl:w-[200px] shrink-0 flex items-center justify-end text-right text-sky-400 group-hover:text-sky-300 transition-colors truncate">
+                                                                <div className="flex-1 shrink-0 flex items-center justify-end text-right text-sky-400 group-hover:text-sky-300 transition-colors truncate">
                                                                     {renderTeamPlayersPC(m.subject_player, m.partner, false)}
                                                                 </div>
                                                                 
@@ -522,11 +522,12 @@ export default function TournamentListPage() {
                                                     </div>
 
                                                     <div className="hidden md:flex items-center justify-end gap-2 xl:gap-4 relative z-10 transition-all shrink-0">
-                                                        <div className="flex flex-col items-center justify-center min-w-[80px] xl:min-w-[100px] px-2 xl:px-4 group-hover:scale-105 transition-transform">
-                                                            <div className="flex items-center gap-1.5 text-[10px] xl:text-[11px] font-black text-cyan-400 uppercase tracking-widest whitespace-nowrap bg-cyan-400/10 px-2 xl:px-3 py-1 rounded-full border border-cyan-400/20">
+                                                        {/* PC Stats (1 row to save height) */}
+                                                        <div className="flex flex-row items-center justify-center gap-2 px-2 xl:px-4 group-hover:scale-105 transition-transform shrink-0">
+                                                            <div className="flex items-center gap-1.5 text-[10px] xl:text-[11px] font-black text-cyan-400 uppercase tracking-widest whitespace-nowrap bg-cyan-400/10 px-2 xl:px-3 py-1.5 rounded-full border border-cyan-400/20">
                                                                 <Eye className="w-3.5 h-3.5" /> {parseStats(m.feedback_notes).view_count}회
                                                             </div>
-                                                            <div className="flex items-center gap-1.5 text-[10px] xl:text-[11px] font-black text-yellow-400 uppercase tracking-widest whitespace-nowrap mt-2 bg-yellow-400/10 px-2 xl:px-3 py-1 rounded-full border border-yellow-400/20">
+                                                            <div className="flex items-center gap-1.5 text-[10px] xl:text-[11px] font-black text-yellow-400 uppercase tracking-widest whitespace-nowrap bg-yellow-400/10 px-2 xl:px-3 py-1.5 rounded-full border border-yellow-400/20">
                                                                 <Clock className="w-3.5 h-3.5" /> {formatDuration(parseStats(m.feedback_notes).view_duration)}
                                                             </div>
                                                         </div>
