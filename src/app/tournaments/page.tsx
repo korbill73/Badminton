@@ -483,8 +483,8 @@ export default function TournamentListPage() {
                                                             </div>
                                                         </div>
 
-                                                        {/* PC Layout - Strict Grid Alignment */}
-                                                        <div className="hidden md:grid grid-cols-[64px_130px_30px_160px_60px_160px_minmax(140px,1fr)_90px] xl:grid-cols-[64px_150px_30px_180px_70px_200px_minmax(160px,1fr)_100px] items-center gap-2 xl:gap-4 w-full">
+                                                        {/* PC Layout - Strict Grid Alignment with 9 columns */}
+                                                        <div className="hidden md:grid grid-cols-[64px_120px_30px_140px_50px_220px_70px_minmax(90px,1fr)_90px] xl:grid-cols-[64px_140px_30px_160px_60px_240px_80px_minmax(100px,1fr)_100px] items-center gap-2 xl:gap-4 w-full">
                                                             {/* 1. W/L */}
                                                             <div className="flex items-center justify-center">
                                                                 <div className={cn(
@@ -519,11 +519,11 @@ export default function TournamentListPage() {
                                                                 </span>
                                                             </div>
 
-                                                            {/* 6. Set Scores */}
-                                                            <div className="flex flex-wrap items-center gap-2 justify-start">
+                                                            {/* 6. Set Scores (flex-nowrap to keep 1 row) */}
+                                                            <div className="flex flex-nowrap items-center gap-2 justify-start overflow-visible">
                                                                 {setsArr.map((s, idx) => (
                                                                     <div key={idx} className={cn(
-                                                                        "px-3 md:px-4 py-1.5 md:py-2 rounded-lg md:rounded-[1.2rem] text-[11px] md:text-[13px] font-black tabular-nums shadow-lg border transition-all duration-500 group-hover:scale-105", 
+                                                                        "px-3 md:px-4 py-1.5 md:py-2 rounded-lg md:rounded-[1.2rem] text-[11px] md:text-[13px] font-black tabular-nums shadow-lg border transition-all duration-500 group-hover:scale-105 shrink-0", 
                                                                         s.p > s.o 
                                                                             ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/20 group-hover:bg-yellow-500/20 group-hover:border-yellow-500/40" 
                                                                             : "bg-white/10 text-slate-200 border-white/10 group-hover:bg-white/20 group-hover:border-white/20"
@@ -533,17 +533,21 @@ export default function TournamentListPage() {
                                                                 ))}
                                                             </div>
 
-                                                            {/* 7. Stats */}
-                                                            <div className="flex flex-row items-center justify-start gap-2 group-hover:scale-105 transition-transform shrink-0 origin-left">
+                                                            {/* 7. Views */}
+                                                            <div className="flex items-center justify-start group-hover:scale-105 transition-transform shrink-0 origin-left">
                                                                 <div className="flex items-center gap-1.5 text-[10px] xl:text-[11px] font-black text-cyan-400 uppercase tracking-widest whitespace-nowrap bg-cyan-400/10 px-2 xl:px-3 py-1.5 rounded-full border border-cyan-400/20">
                                                                     <Eye className="w-3.5 h-3.5" /> {parseStats(m.feedback_notes).view_count}회
                                                                 </div>
+                                                            </div>
+
+                                                            {/* 8. Duration */}
+                                                            <div className="flex items-center justify-start group-hover:scale-105 transition-transform shrink-0 origin-left">
                                                                 <div className="flex items-center gap-1.5 text-[10px] xl:text-[11px] font-black text-yellow-400 uppercase tracking-widest whitespace-nowrap bg-yellow-400/10 px-2 xl:px-3 py-1.5 rounded-full border border-yellow-400/20">
                                                                     <Clock className="w-3.5 h-3.5" /> {formatDuration(parseStats(m.feedback_notes).view_duration)}
                                                                 </div>
                                                             </div>
 
-                                                            {/* 8. Buttons */}
+                                                            {/* 9. Buttons */}
                                                             <div className="flex items-center justify-end gap-2 shrink-0">
                                                                 <button 
                                                                     onClick={(e) => { e.stopPropagation(); setEditingMatch(m); setModalOpen(true); }}
