@@ -251,46 +251,6 @@ export default function TournamentListPage() {
         return `${name1}${s1} / ${name2}${s2}`;
     };
 
-    const renderTeamPlayersPC = (p1: any, p2: any, isOpponent: boolean) => {
-        if (!p1) return <span className="opacity-50 font-black text-lg">미지정</span>;
-        
-        const formatPlayer = (p: any, isPrimary: boolean) => {
-            const name = p.name;
-            const school = getSchool(p);
-            // "박준서"는 학교 생략 (요구사항)
-            const shouldHideSchool = name === '박준서';
-            const displaySchool = shouldHideSchool ? "" : (school ? `(${school})` : "");
-            
-            if (isPrimary) {
-                return (
-                    <span className="inline-flex items-baseline gap-1.5 truncate">
-                        <span className="font-black text-[22px] tracking-tight">{name}</span>
-                        {displaySchool && <span className="text-sm opacity-60 font-bold truncate">{displaySchool}</span>}
-                    </span>
-                );
-            } else {
-                return (
-                    <span className="inline-flex items-baseline gap-1 truncate">
-                        <span className="font-bold text-base opacity-90 tracking-tight">{name}</span>
-                        {displaySchool && <span className="text-[11px] opacity-50 truncate">{displaySchool}</span>}
-                    </span>
-                );
-            }
-        };
-
-        if (!p2) {
-            return <div className="flex items-center">{formatPlayer(p1, true)}</div>;
-        }
-
-        return (
-            <div className="flex items-baseline gap-2 flex-nowrap overflow-hidden">
-                {formatPlayer(p1, true)}
-                <span className="text-sm opacity-30 font-black shrink-0">/</span>
-                {formatPlayer(p2, false)}
-            </div>
-        );
-    }
-
     useEffect(() => { fetchData(); }, []);
 
     if (loading) return (
@@ -481,21 +441,31 @@ export default function TournamentListPage() {
                                                                 </div>
                                                             </div>
 
-                                                            {/* Names Section (PC) - Aligned Columns */}
-                                                            <div className="hidden md:flex flex-row items-center gap-6 flex-1 overflow-hidden min-w-0">
-                                                                <div className="w-[200px] xl:w-[260px] shrink-0 flex items-center justify-start text-left text-sky-400 group-hover:text-sky-300 transition-colors truncate">
-                                                                    {renderTeamPlayersPC(m.subject_player, m.partner, false)}
+                                                            {/* Names Section (PC First) */}
+                                                            <div className={cn(
+                                                                "hidden md:flex md:flex-row md:items-center gap-2 md:gap-6 flex-1 overflow-hidden",
+                                                                isSingles ? "flex-row items-center flex-nowrap" : "flex-col"
+                                                            )}>
+                                                                <span className={cn(
+                                                                    "font-black text-sky-400 group-hover:text-sky-300 transition-colors shrink-0",
+                                                                    isSingles ? "text-lg md:text-2xl" : "text-xl md:text-2xl truncate"
+                                                                )}>
+                                                                    {renderTeamPlayers(m.subject_player, m.partner, false)}
+                                                                </span>
+                                                                <div className={cn(
+                                                                    "flex items-center gap-1.5 md:gap-0 md:flex-col shrink-0",
+                                                                    isSingles ? "flex-row mx-1" : ""
+                                                                )}>
+                                                                    <div className="hidden md:block h-px w-8 bg-white/10 group-hover:w-12 group-hover:bg-blue-500/30 transition-all duration-500" />
+                                                                    <span className="text-slate-700 font-black italic text-[9px] md:text-[10px] uppercase opacity-40">vs</span>
+                                                                    <div className="hidden md:block h-px w-8 bg-white/10 group-hover:w-12 group-hover:bg-rose-500/30 transition-all duration-500" />
                                                                 </div>
-                                                                
-                                                                <div className="flex items-center gap-3 shrink-0">
-                                                                    <div className="h-px w-4 xl:w-6 bg-white/10 group-hover:bg-blue-500/30 transition-all duration-500" />
-                                                                    <span className="text-slate-700 font-black italic text-[10px] uppercase opacity-40">vs</span>
-                                                                    <div className="h-px w-4 xl:w-6 bg-white/10 group-hover:bg-rose-500/30 transition-all duration-500" />
-                                                                </div>
-
-                                                                <div className="flex-1 flex items-center text-yellow-400 group-hover:text-yellow-300 transition-colors truncate">
-                                                                    {renderTeamPlayersPC(m.opponent_1, m.opponent_2, true)}
-                                                                </div>
+                                                                <span className={cn(
+                                                                    "font-black text-yellow-400 group-hover:text-yellow-300 transition-colors shrink-0",
+                                                                    isSingles ? "text-lg md:text-2xl" : "text-xl md:text-2xl truncate"
+                                                                )}>
+                                                                    {renderTeamPlayers(m.opponent_1, m.opponent_2, true)}
+                                                                </span>
                                                             </div>
                                                         </div>
 
@@ -561,7 +531,6 @@ export default function TournamentListPage() {
                 tournamentId={targetTId} 
                 match={editingMatch} 
                 players={players} 
-                matches={matches}
                 onSave={handleSaveMatch} 
             />
 

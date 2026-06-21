@@ -200,16 +200,15 @@ export default function ProMatchModal({ isOpen, onClose, match, players, onSave,
                              <div className="flex md:flex-col gap-1">
                                 <button type="button" onClick={() => setFormData({...formData, category: '고등부'})} className={cn("flex-1 py-2 px-1 rounded-xl text-[10px] font-black transition-all", formData.category === '고등부' ? "bg-blue-600 text-white shadow-lg" : "bg-white/5 text-slate-500")}>고등부</button>
                                 <button type="button" onClick={() => setFormData({...formData, category: '프로'})} className={cn("flex-1 py-2 px-1 rounded-xl text-[10px] font-black transition-all", formData.category === '프로' ? "bg-emerald-600 text-white shadow-lg" : "bg-white/5 text-slate-500")}>프로</button>
-                                <button type="button" onClick={() => setFormData({...formData, category: '영어 반복'})} className={cn("flex-1 py-2 px-1 rounded-xl text-[10px] font-black transition-all", formData.category === '영어 반복' ? "bg-cyan-600 text-white shadow-lg" : "bg-white/5 text-slate-500")}>영어반복</button>
                              </div>
                         </div>
                         <div className="md:col-span-3 space-y-1 relative">
-                             <p className="text-[10px] font-black text-blue-400 tracking-widest pl-1">영상 제목 (대회 명칭)</p>
+                             <p className="text-[10px] font-black text-blue-400 tracking-widest pl-1">대회 명칭</p>
                              <input 
                                 value={formData.tournament} 
                                 onChange={e => handleSuggest(e.target.value, 'tournament')} 
                                 className="w-full bg-[#1e293b] border border-blue-500/20 px-4 md:px-6 py-3 rounded-2xl text-base md:text-lg font-black outline-none focus:border-blue-500/50 shadow-inner" 
-                                placeholder={formData.category === '영어 반복' ? "학습 영상 제목" : "대회명을 입력하세요"} 
+                                placeholder="대회명을 입력하세요" 
                              />
                              {activeSuggestField === 'tournament' && tournamentSuggestions.length > 0 && (
                                  <div className="absolute top-full left-0 right-0 mt-1 bg-[#1e293b] border border-white/10 rounded-2xl shadow-2xl z-[100] max-h-[150px] overflow-y-auto">
@@ -219,111 +218,95 @@ export default function ProMatchModal({ isOpen, onClose, match, players, onSave,
                                  </div>
                              )}
                         </div>
-                        
-                        {formData.category !== '영어 반복' && (
-                            <div className="md:col-span-3 space-y-1 relative">
-                                 <p className="text-[10px] font-black text-slate-500 tracking-widest pl-1">장소</p>
-                                 <input 
-                                    value={formData.location} 
-                                    onChange={e => handleSuggest(e.target.value, 'location')} 
-                                    className="w-full bg-[#1e293b] border border-white/5 px-4 md:px-6 py-3 rounded-2xl text-base md:text-lg font-black outline-none" 
-                                    placeholder="경기 장소" 
-                                 />
-                                 {activeSuggestField === 'location' && locationSuggestions.length > 0 && (
-                                     <div className="absolute top-full left-0 right-0 mt-1 bg-[#1e293b] border border-white/10 rounded-2xl shadow-2xl z-[100] max-h-[150px] overflow-y-auto">
-                                         {locationSuggestions.map((l, idx) => (
-                                             <div key={idx} onClick={() => selectSuggest(l, 'location')} className="px-4 py-3 hover:bg-blue-600 transition-all cursor-pointer font-bold text-sm border-b border-white/5 last:border-0">{l}</div>
-                                         ))}
-                                     </div>
-                                 )}
-                            </div>
-                        )}
-
-                        <div className={cn("space-y-1", formData.category === '영어 반복' ? "md:col-span-8" : "md:col-span-2")}>
+                        <div className="md:col-span-3 space-y-1 relative">
+                             <p className="text-[10px] font-black text-slate-500 tracking-widest pl-1">장소</p>
+                             <input 
+                                value={formData.location} 
+                                onChange={e => handleSuggest(e.target.value, 'location')} 
+                                className="w-full bg-[#1e293b] border border-white/5 px-4 md:px-6 py-3 rounded-2xl text-base md:text-lg font-black outline-none" 
+                                placeholder="경기 장소" 
+                             />
+                             {activeSuggestField === 'location' && locationSuggestions.length > 0 && (
+                                 <div className="absolute top-full left-0 right-0 mt-1 bg-[#1e293b] border border-white/10 rounded-2xl shadow-2xl z-[100] max-h-[150px] overflow-y-auto">
+                                     {locationSuggestions.map((l, idx) => (
+                                         <div key={idx} onClick={() => selectSuggest(l, 'location')} className="px-4 py-3 hover:bg-blue-600 transition-all cursor-pointer font-bold text-sm border-b border-white/5 last:border-0">{l}</div>
+                                     ))}
+                                 </div>
+                             )}
+                        </div>
+                        <div className="md:col-span-2 space-y-1">
                              <p className="text-[10px] font-black text-slate-500 tracking-widest pl-1">일자</p>
                              <input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full bg-[#1e293b] border border-white/5 px-4 py-3 rounded-2xl text-sm md:text-base font-black shadow-inner" />
                         </div>
-
-                        {formData.category !== '영어 반복' && (
-                            <div className="md:col-span-3 space-y-1">
-                                 <p className="text-[10px] font-black text-slate-500 tracking-widest pl-1">경기 종목</p>
-                                 <select value={formData.match_type} onChange={e => setFormData({...formData, match_type: e.target.value})} className="w-full bg-blue-600 px-4 md:px-6 py-3 rounded-2xl text-sm md:text-base font-black text-white outline-none appearance-none cursor-pointer text-center shadow-xl">
-                                    <option value="단식">단식 (Singles)</option>
-                                    <option value="복식">복식 (Doubles)</option>
-                                 </select>
-                            </div>
-                        )}
+                        <div className="md:col-span-3 space-y-1">
+                             <p className="text-[10px] font-black text-slate-500 tracking-widest pl-1">경기 종목</p>
+                             <select value={formData.match_type} onChange={e => setFormData({...formData, match_type: e.target.value})} className="w-full bg-blue-600 px-4 md:px-6 py-3 rounded-2xl text-sm md:text-base font-black text-white outline-none appearance-none cursor-pointer text-center shadow-xl">
+                                <option value="단식">단식 (Singles)</option>
+                                <option value="복식">복식 (Doubles)</option>
+                             </select>
+                        </div>
                     </div>
 
                     {/* Row 2: Combatants */}
-                    {formData.category !== '영어 반복' && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                            <div className={cn("p-4 md:p-6 bg-blue-600/[0.03] border border-blue-500/20 rounded-3xl md:rounded-[2.5rem] space-y-4 relative transition-all", formData.match_type === '복식' ? 'grid grid-cols-2 gap-4' : 'block')}>
-                                <div className="absolute top-0 left-8 px-4 py-1 bg-blue-600 text-[8px] font-black rounded-b-lg tracking-widest">분석 대상 팀</div>
-                                <AutocompleteField label="주요 선수" value={formData.player_name} field="player_name" color="blue" suggestions={suggestions} activeField={activeSuggestField} onSuggest={handleSuggest} onSelect={selectSuggest} />
-                                {formData.match_type === '복식' && <AutocompleteField label="파트너" value={formData.partner_name} field="partner_name" color="blue" suggestions={suggestions} activeField={activeSuggestField} onSuggest={handleSuggest} onSelect={selectSuggest} />}
-                            </div>
-                            <div className={cn("p-4 md:p-6 bg-rose-600/[0.03] border border-rose-500/20 rounded-3xl md:rounded-[2.5rem] space-y-4 relative transition-all", formData.match_type === '복식' ? 'grid grid-cols-2 gap-4' : 'block')}>
-                                <div className="absolute top-0 left-8 px-4 py-1 bg-rose-600 text-[8px] font-black rounded-b-lg tracking-widest">상대 선수 팀</div>
-                                <AutocompleteField label="상대 선수 1" value={formData.opponent} field="opponent" color="rose" suggestions={suggestions} activeField={activeSuggestField} onSuggest={handleSuggest} onSelect={selectSuggest} />
-                                {formData.match_type === '복식' && <AutocompleteField label="상대 선수 2" value={formData.opponent_2_name} field="opponent_2_name" color="rose" suggestions={suggestions} activeField={activeSuggestField} onSuggest={handleSuggest} onSelect={selectSuggest} />}
-                            </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                        <div className={cn("p-4 md:p-6 bg-blue-600/[0.03] border border-blue-500/20 rounded-3xl md:rounded-[2.5rem] space-y-4 relative transition-all", formData.match_type === '복식' ? 'grid grid-cols-2 gap-4' : 'block')}>
+                            <div className="absolute top-0 left-8 px-4 py-1 bg-blue-600 text-[8px] font-black rounded-b-lg tracking-widest">분석 대상 팀</div>
+                            <AutocompleteField label="주요 선수" value={formData.player_name} field="player_name" color="blue" suggestions={suggestions} activeField={activeSuggestField} onSuggest={handleSuggest} onSelect={selectSuggest} />
+                            {formData.match_type === '복식' && <AutocompleteField label="파트너" value={formData.partner_name} field="partner_name" color="blue" suggestions={suggestions} activeField={activeSuggestField} onSuggest={handleSuggest} onSelect={selectSuggest} />}
                         </div>
-                    )}
+                        <div className={cn("p-4 md:p-6 bg-rose-600/[0.03] border border-rose-500/20 rounded-3xl md:rounded-[2.5rem] space-y-4 relative transition-all", formData.match_type === '복식' ? 'grid grid-cols-2 gap-4' : 'block')}>
+                            <div className="absolute top-0 left-8 px-4 py-1 bg-rose-600 text-[8px] font-black rounded-b-lg tracking-widest">상대 선수 팀</div>
+                            <AutocompleteField label="상대 선수 1" value={formData.opponent} field="opponent" color="rose" suggestions={suggestions} activeField={activeSuggestField} onSuggest={handleSuggest} onSelect={selectSuggest} />
+                            {formData.match_type === '복식' && <AutocompleteField label="상대 선수 2" value={formData.opponent_2_name} field="opponent_2_name" color="rose" suggestions={suggestions} activeField={activeSuggestField} onSuggest={handleSuggest} onSelect={selectSuggest} />}
+                        </div>
+                    </div>
 
                     {/* Row 3: Score Board */}
-                    {formData.category !== '영어 반복' && (
-                        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-6 items-center bg-black/40 p-5 md:p-8 rounded-3xl md:rounded-[2.5rem] border border-white/10 shadow-inner">
-                            <div className="md:col-span-4 flex items-center gap-4 md:gap-6">
-                                 <div className="p-4 md:p-5 bg-yellow-500/10 rounded-2xl border border-yellow-500/20 shadow-xl overflow-hidden relative shrink-0">
-                                    <Trophy className="w-8 h-8 md:w-10 md:h-10 text-yellow-500" />
-                                    <div className="absolute inset-0 bg-yellow-400 opacity-5 animate-pulse" />
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-6 items-center bg-black/40 p-5 md:p-8 rounded-3xl md:rounded-[2.5rem] border border-white/10 shadow-inner">
+                        <div className="md:col-span-4 flex items-center gap-4 md:gap-6">
+                             <div className="p-4 md:p-5 bg-yellow-500/10 rounded-2xl border border-yellow-500/20 shadow-xl overflow-hidden relative shrink-0">
+                                <Trophy className="w-8 h-8 md:w-10 md:h-10 text-yellow-500" />
+                                <div className="absolute inset-0 bg-yellow-400 opacity-5 animate-pulse" />
+                             </div>
+                             <div className="space-y-0 text-left">
+                                 <p className="text-[10px] font-black text-slate-500 tracking-widest pl-1 uppercase">토탈 스코어</p>
+                                 <div className="flex items-center gap-2">
+                                     <span className="text-4xl md:text-6xl font-black text-yellow-400 tabular-nums drop-shadow-[0_0_15px_rgba(250,204,21,0.5)]">{formData.score}</span>
                                  </div>
-                                 <div className="space-y-0 text-left">
-                                     <p className="text-[10px] font-black text-slate-500 tracking-widest pl-1 uppercase">토탈 스코어</p>
-                                     <div className="flex items-center gap-2">
-                                         <span className="text-4xl md:text-6xl font-black text-yellow-400 tabular-nums drop-shadow-[0_0_15px_rgba(250,204,21,0.5)]">{formData.score}</span>
-                                     </div>
-                                 </div>
-                            </div>
-                            <div className="md:col-span-8 grid grid-cols-3 gap-3 md:gap-5">
-                                 {[1, 2, 3].map(s => (
-                                    <div key={s} className="space-y-1 bg-[#1e293b] p-3 md:p-4 rounded-2xl md:rounded-[2rem] border border-white/5 text-center shadow-xl group/set">
-                                         <p className="text-[9px] md:text-[10px] font-black text-slate-400 tracking-widest group-hover/set:text-yellow-400 transition-colors">제 {s}세트</p>
-                                         <input 
-                                            value={(formData as any)[`set_${s}`]} 
-                                            onChange={e => handleSetScoreChange(e.target.value, `set_${s}`)} 
-                                            className="w-full bg-black/40 border border-white/5 py-2 md:py-3 rounded-xl md:rounded-2xl text-xl md:text-3xl font-black text-white text-center outline-none focus:border-yellow-400/30 transition-all" 
-                                            placeholder="21:0" 
-                                         />
-                                    </div>
-                                 ))}
-                            </div>
+                             </div>
                         </div>
-                    )}
+                        <div className="md:col-span-8 grid grid-cols-3 gap-3 md:gap-5">
+                             {[1, 2, 3].map(s => (
+                                <div key={s} className="space-y-1 bg-[#1e293b] p-3 md:p-4 rounded-2xl md:rounded-[2rem] border border-white/5 text-center shadow-xl group/set">
+                                     <p className="text-[9px] md:text-[10px] font-black text-slate-400 tracking-widest group-hover/set:text-yellow-400 transition-colors">제 {s}세트</p>
+                                     <input 
+                                        value={(formData as any)[`set_${s}`]} 
+                                        onChange={e => handleSetScoreChange(e.target.value, `set_${s}`)} 
+                                        className="w-full bg-black/40 border border-white/5 py-2 md:py-3 rounded-xl md:rounded-2xl text-xl md:text-3xl font-black text-white text-center outline-none focus:border-yellow-400/30 transition-all" 
+                                        placeholder="21:0" 
+                                     />
+                                </div>
+                             ))}
+                        </div>
+                    </div>
 
                     {/* Row 4: Final Details */}
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6 items-center">
-                         <div className={cn("space-y-1 text-left", formData.category === '영어 반복' ? "md:col-span-12" : "md:col-span-4")}>
+                         <div className="md:col-span-4 space-y-1 text-left">
                               <p className="text-[10px] font-black text-slate-500 tracking-widest pl-1 underline decoration-blue-500/40">유튜브 영상 ID / URL</p>
                               <div className="relative group/vid">
                                    <input value={formData.video_url} onChange={e => setFormData({...formData, video_url: e.target.value})} className="w-full bg-[#1e293b] border border-white/5 px-4 md:px-6 py-3 md:py-4 rounded-2xl text-base md:text-lg font-bold text-sky-400 outline-none" placeholder="Youtube ID" />
                                    <Play className="absolute right-4 md:right-6 top-1/2 -translate-y-1/2 w-5 h-5 md:w-6 md:h-6 text-rose-500" />
                               </div>
                          </div>
-                         
-                         {formData.category !== '영어 반복' && (
-                             <>
-                                 <div className="md:col-span-2 space-y-1 text-left">
-                                      <p className="text-[10px] font-black text-slate-500 tracking-widest pl-1">상세 라운드</p>
-                                      <input value={formData.match_name} onChange={e => setFormData({...formData, match_name: e.target.value})} className="w-full bg-[#1e293b] border border-white/5 px-4 py-3 md:py-4 rounded-2xl text-sm md:text-base font-black outline-none" placeholder="결승/준결승" />
-                                 </div>
-                                 <div className="md:col-span-6 space-y-1 text-left">
-                                      <p className="text-[10px] font-black text-slate-500 tracking-widest pl-1">분석 요약</p>
-                                      <input value={formData.summary} onChange={e => setFormData({...formData, summary: e.target.value})} className="w-full bg-[#1e293b] border border-white/5 px-4 md:px-6 py-3 md:py-4 rounded-2xl text-base md:text-lg font-bold text-slate-300 outline-none" placeholder="실전 전술 핵심 통찰" />
-                                 </div>
-                             </>
-                         )}
+                         <div className="md:col-span-2 space-y-1 text-left">
+                              <p className="text-[10px] font-black text-slate-500 tracking-widest pl-1">상세 라운드</p>
+                              <input value={formData.match_name} onChange={e => setFormData({...formData, match_name: e.target.value})} className="w-full bg-[#1e293b] border border-white/5 px-4 py-3 md:py-4 rounded-2xl text-sm md:text-base font-black outline-none" placeholder="결승/준결승" />
+                         </div>
+                         <div className="md:col-span-6 space-y-1 text-left">
+                              <p className="text-[10px] font-black text-slate-500 tracking-widest pl-1">분석 요약</p>
+                              <input value={formData.summary} onChange={e => setFormData({...formData, summary: e.target.value})} className="w-full bg-[#1e293b] border border-white/5 px-4 md:px-6 py-3 md:py-4 rounded-2xl text-base md:text-lg font-bold text-slate-300 outline-none" placeholder="실전 전술 핵심 통찰" />
+                         </div>
                     </div>
                 </div>
 

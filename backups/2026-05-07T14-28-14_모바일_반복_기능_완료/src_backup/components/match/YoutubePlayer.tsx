@@ -43,7 +43,7 @@ export default function YoutubePlayer({ videoId, onPlayerReady, onStateChange }:
     }, [onPlayerReady]);
 
     return (
-        <div className="w-full h-full overflow-hidden bg-black shadow-lg">
+        <div className="aspect-video w-full rounded-xl overflow-hidden bg-black shadow-lg">
             {cleanVideoId ? (
                 <YouTube
                     ref={ytRef}

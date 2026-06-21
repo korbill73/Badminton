@@ -36,7 +36,7 @@ export default function ProArchiveMainPage() {
     const [matches, setMatches] = useState<any[]>([]);
     const [bdPlayers, setBdPlayers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [selectedCategory, setSelectedCategory] = useState<'고등부' | '프로' | '영어 반복'>('고등부');
+    const [selectedCategory, setSelectedCategory] = useState<'고등부' | '프로'>('고등부');
     const hasTrackedViewRef = useRef(false);
 
     const [isMatchModalOpen, setIsMatchModalOpen] = useState(false);
@@ -236,40 +236,6 @@ export default function ProArchiveMainPage() {
     }, [studyMatch?.id]);
 
     useEffect(() => {
-        if (loopA !== null && loopB !== null && studyMatch && (studyMatch.category === '영어 반복' || selectedCategory === '영어 반복') && !editingNote) {
-            const fetchAndSetSubtitle = async () => {
-                const vidId = studyMatch.video_url?.includes('v=') ? studyMatch.video_url.split('v=')[1].split('&')[0] : studyMatch.video_url;
-                if (!vidId) return;
-                try {
-                    const res = await fetch(`/api/transcript?videoId=${vidId}`);
-                    const data = await res.json();
-                    if (data.transcript) {
-                        const texts = data.transcript
-                            .filter((t: any) => {
-                                const start = t.offset / 1000;
-                                const end = (t.offset + t.duration) / 1000;
-                                return start < loopB && end > loopA;
-                            })
-                            .map((t: any) => t.text);
-                        
-                        if (texts.length > 0 && contentInputRef.current) {
-                            const decodeHTML = (html: string) => {
-                                const txt = document.createElement("textarea");
-                                txt.innerHTML = html;
-                                return txt.value;
-                            };
-                            contentInputRef.current.value = decodeHTML(texts[0]);
-                        }
-                    }
-                } catch (e) {
-                    console.error("Failed to fetch transcript", e);
-                }
-            };
-            fetchAndSetSubtitle();
-        }
-    }, [loopB]);
-
-    useEffect(() => {
         if (!player) return;
         const interval = setInterval(() => {
             const curr = player.getCurrentTime();
@@ -324,22 +290,12 @@ export default function ProArchiveMainPage() {
 
         if (!err) {
             fetchNotes(studyMatch.id);
-            if (studyMatch.category === '영어 반복' || selectedCategory === '영어 반복') {
-                setLoopA(loopB);
-                setLoopB(null);
-                if (player && loopB !== null) {
-                    player.seekTo(loopB);
-                    player.playVideo();
-                }
-            } else {
-                setLoopA(null); setLoopB(null);
-                if (player && loopB !== null) {
-                    player.seekTo(loopB + 5);
-                    player.playVideo();
-                }
-            }
-            setEditingNote(null);
+            setLoopA(null); setLoopB(null); setEditingNote(null);
             if (contentInputRef.current) contentInputRef.current.value = "";
+            if (player && loopB !== null) {
+                player.seekTo(loopB + 5);
+                player.playVideo();
+            }
         }
     };
 
@@ -447,17 +403,15 @@ export default function ProArchiveMainPage() {
                 <div className="max-w-[1580px] mx-auto p-4 md:p-12 space-y-6 md:space-y-10">
                     <div className="flex flex-col md:flex-row justify-between items-center bg-[#111827]/40 p-4 md:p-8 rounded-3xl md:rounded-[3.5rem] border border-white/5 shadow-2xl gap-4">
                         <div className="flex w-full md:w-auto items-center gap-1 p-1 bg-black/40 rounded-2xl md:rounded-3xl border border-white/5">
-                            {['고등부', '프로', '영어 반복'].map((cat: any) => (
-                                <button key={cat} onClick={() => setSelectedCategory(cat)} className={cn("flex-1 md:flex-none px-6 md:px-12 py-3 md:py-4 rounded-xl md:rounded-2xl font-black text-sm md:text-xl transition-all duration-500", selectedCategory === cat ? "bg-blue-600 text-white shadow-[0_0_40px_rgba(37,99,235,0.3)]" : "text-white/60 hover:text-white")}>{cat === '영어 반복' ? '영어 반복' : `${cat} 분석`}</button>
+                            {['고등부', '프로'].map((cat: any) => (
+                                <button key={cat} onClick={() => setSelectedCategory(cat)} className={cn("flex-1 md:flex-none px-6 md:px-12 py-3 md:py-4 rounded-xl md:rounded-2xl font-black text-sm md:text-xl transition-all duration-500", selectedCategory === cat ? "bg-blue-600 text-white shadow-[0_0_40px_rgba(37,99,235,0.3)]" : "text-white/60 hover:text-white")}>{cat} 분석</button>
                             ))}
                         </div>
-                        <button onClick={() => { setEditingMatch({ category: selectedCategory }); setIsMatchModalOpen(true); }} className="w-full md:w-auto px-6 py-4 bg-blue-600 text-white rounded-xl md:rounded-[1.5rem] font-black flex items-center justify-center gap-3 hover:bg-blue-700 transition-all border border-blue-500 text-sm md:text-base"><Plus className="w-4 h-4 md:w-5 md:h-5" /> {selectedCategory === '영어 반복' ? '반복 학습 영상 추가' : '데이터 분석 추가'}</button>
+                        <button onClick={() => { setEditingMatch(null); setIsMatchModalOpen(true); }} className="w-full md:w-auto px-6 py-4 bg-blue-600 text-white rounded-xl md:rounded-[1.5rem] font-black flex items-center justify-center gap-3 hover:bg-blue-700 transition-all border border-blue-500 text-sm md:text-base"><Plus className="w-4 h-4 md:w-5 md:h-5" /> 데이터 분석 추가</button>
                     </div>
                     
                     <div className="space-y-3 md:space-y-4">
-                        {filteredMatches.map((m: any) => {
-                            const isEnglish = selectedCategory === '영어 반복';
-                            return (
+                        {filteredMatches.map((m: any) => (
                             <div key={m.id} onClick={() => { 
                                 if (isMobile) toggleFullScreen();
                                 setStudyMatch(m); 
@@ -465,54 +419,32 @@ export default function ProArchiveMainPage() {
                                 hasTrackedViewRef.current = false;
                                 incrementProMatchView(m.id, m.summary || '');
                             }} className="group relative bg-[#111827] rounded-2xl md:rounded-[3.2rem] p-4 md:px-10 md:py-7 transition-all duration-500 flex flex-col md:flex-row items-center border border-white/10 hover:border-blue-500 shadow-inner hover:scale-[1.012] cursor-pointer gap-4 md:gap-0">
-                                
-                                {isEnglish ? (
-                                    /* English Repeat Custom Layout */
-                                    <>
-                                        <div className="flex-1 flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-8 min-w-0 pr-8">
-                                            <div className="flex flex-col shrink-0 gap-2 w-auto md:w-[160px]">
-                                                <span className="flex items-center gap-3 text-sky-400 font-black text-2xl whitespace-nowrap"><Calendar className="w-6 h-6" /> {m.date?.replace(/^20/, '')}</span>
-                                            </div>
-                                            <div className="flex flex-col min-w-0 flex-1">
-                                                <span className="text-white font-black text-2xl truncate tracking-tight w-full">{m.tournament}</span>
-                                                {m.match_name && (
-                                                    <span className="text-yellow-500 font-black text-xl uppercase tracking-tighter truncate w-full">{m.match_name}</span>
-                                                )}
-                                            </div>
+                                <div className="hidden md:flex w-[480px] shrink-0 border-r border-white/10 pr-8 items-center gap-8 min-w-0">
+                                    <div className="flex flex-col shrink-0 gap-2">
+                                        <span className="flex items-center gap-3 text-sky-400 font-black text-2xl whitespace-nowrap"><Calendar className="w-6 h-6" /> {m.date?.replace(/^20/, '')}</span>
+                                        <span className="flex items-center gap-3 text-yellow-500 font-black text-2xl whitespace-nowrap"><MapPin className="w-6 h-6" /> {m.location}</span>
+                                    </div>
+                                    <div className="flex flex-col min-w-0 gap-1.5">
+                                        <span className="text-white font-black text-2xl truncate tracking-tight">{m.tournament}</span>
+                                        {m.match_name && (
+                                            <span className="text-yellow-500 font-black text-xl uppercase tracking-tighter truncate">{m.match_name}</span>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="hidden md:flex flex-1 px-4 items-center justify-center min-w-0">
+                                    <div className="flex items-center justify-center gap-6 w-full max-w-2xl">
+                                        <div className="flex-1 flex flex-col items-end justify-center min-w-0">
+                                            <span className={cn("font-black text-sky-400 text-right leading-tight", m.partner_name ? "text-xl" : "text-2xl")}>{m.player_name}</span>
+                                            {m.partner_name && <span className="text-sky-400/80 font-bold text-sm text-right mt-1">/ {m.partner_name}</span>}
                                         </div>
-                                    </>
-                                ) : (
-                                    /* Pro/High School Layout */
-                                    <>
-                                        <div className="hidden md:flex w-[480px] shrink-0 border-r border-white/10 pr-8 items-center gap-8 min-w-0">
-                                            <div className="flex flex-col shrink-0 gap-2 w-[160px]">
-                                                <span className="flex items-center gap-3 text-sky-400 font-black text-2xl whitespace-nowrap"><Calendar className="w-6 h-6" /> {m.date?.replace(/^20/, '')}</span>
-                                                <span className="flex items-center gap-3 text-yellow-500 font-black text-2xl whitespace-nowrap"><MapPin className="w-6 h-6" /> {m.location}</span>
-                                            </div>
-                                            <div className="flex flex-col min-w-0 gap-1.5 flex-1">
-                                                <span className="text-white font-black text-2xl truncate tracking-tight w-full">{m.tournament}</span>
-                                                {m.match_name && (
-                                                    <span className="text-yellow-500 font-black text-xl uppercase tracking-tighter truncate w-full">{m.match_name}</span>
-                                                )}
-                                            </div>
+                                        <div className="px-5 py-2 bg-emerald-500/20 rounded-full border border-emerald-500 shrink-0"><span className="text-[11px] font-black italic text-emerald-300 tracking-widest uppercase">VS</span></div>
+                                        <div className="flex-1 flex flex-col items-start justify-center min-w-0">
+                                            <span className={cn("font-black text-yellow-400 text-left leading-tight", m.opponent_2_name ? "text-xl" : "text-2xl")}>{m.opponent}</span>
+                                            {m.opponent_2_name && <span className="text-yellow-400/80 font-bold text-sm text-left mt-1">/ {m.opponent_2_name}</span>}
                                         </div>
-                                        <div className="hidden md:flex flex-1 px-4 items-center justify-center min-w-0">
-                                            <div className="flex items-center justify-center gap-6 w-full max-w-2xl">
-                                                <div className="flex-1 flex flex-col items-end justify-center min-w-0 w-full overflow-hidden">
-                                                    <span className={cn("font-black text-sky-400 text-right leading-tight truncate w-full", m.partner_name ? "text-xl" : "text-2xl")}>{m.player_name}</span>
-                                                    {m.partner_name && <span className="text-sky-400/80 font-bold text-sm text-right mt-1 truncate w-full">/ {m.partner_name}</span>}
-                                                </div>
-                                                <div className="px-5 py-2 bg-emerald-500/20 rounded-full border border-emerald-500 shrink-0"><span className="text-[11px] font-black italic text-emerald-300 tracking-widest uppercase">VS</span></div>
-                                                <div className="flex-1 flex flex-col items-start justify-center min-w-0 w-full overflow-hidden">
-                                                    <span className={cn("font-black text-yellow-400 text-left leading-tight truncate w-full", m.opponent_2_name ? "text-xl" : "text-2xl")}>{m.opponent}</span>
-                                                    {m.opponent_2_name && <span className="text-yellow-400/80 font-bold text-sm text-left mt-1 truncate w-full">/ {m.opponent_2_name}</span>}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </>
-                                )}
-
-                                <div className={cn("hidden md:flex flex-col items-center justify-center px-8 border-white/10 group-hover:scale-105 transition-transform shrink-0", isEnglish ? "border-l-0" : "border-l min-w-[180px]")}>
+                                    </div>
+                                </div>
+                                <div className="hidden md:flex flex-col items-center justify-center min-w-[180px] px-8 border-l border-white/10 group-hover:scale-105 transition-transform shrink-0">
                                     <div className="flex items-center gap-2 text-sm font-black text-cyan-400 uppercase tracking-widest whitespace-nowrap bg-cyan-400/10 px-4 py-1.5 rounded-full border border-cyan-400/20">
                                         <Eye className="w-4 h-4" /> {parseStats(m.summary || '').view_count}회
                                     </div>
@@ -520,16 +452,14 @@ export default function ProArchiveMainPage() {
                                         <Clock className="w-4 h-4" /> {formatDuration(parseStats(m.summary || '').view_duration)}
                                     </div>
                                 </div>
-
-                                <div className="hidden md:flex shrink-0 items-center justify-end border-l border-white/10 pl-8 gap-6 min-w-[200px]">
-                                    {!isEnglish && <span className="text-5xl font-black text-yellow-400 tabular-nums">{m.score || '0:0'}</span>}
+                                <div className="hidden md:flex w-[380px] shrink-0 items-center justify-end border-l border-white/10 pl-8 gap-6">
+                                    <span className="text-5xl font-black text-yellow-400 tabular-nums">{m.score || '0:0'}</span>
                                     <div className="flex items-center gap-2 ml-4">
                                         <button onClick={(e) => { e.stopPropagation(); setEditingMatch(m); setIsMatchModalOpen(true); }} className="p-3 bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white rounded-2xl border border-blue-500/30"><Edit2 className="w-4 h-4" /></button>
                                         <button onClick={(e) => { e.stopPropagation(); if(confirm('삭제?')) supabase.from('pro_matches').delete().eq('id', m.id).then(()=>fetchData()); }} className="p-3 bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white rounded-2xl border border-rose-500/30"><Trash2 className="w-4 h-4" /></button>
                                     </div>
                                 </div>
 
-                                {/* Mobile Layout */}
                                 <div className="md:hidden w-full flex flex-col gap-3">
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2">
@@ -537,7 +467,7 @@ export default function ProArchiveMainPage() {
                                             <span className="text-xs font-black text-sky-400">{m.date?.replace(/^20/, '')}</span>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            {!isEnglish && <span className="text-lg font-black text-yellow-400 tabular-nums">{m.score || '0:0'}</span>}
+                                            <span className="text-lg font-black text-yellow-400 tabular-nums">{m.score || '0:0'}</span>
                                             <div className="flex gap-1">
                                                 <button onClick={(e) => { e.stopPropagation(); setEditingMatch(m); setIsMatchModalOpen(true); }} className="p-1.5 bg-blue-600/20 text-blue-300 rounded-lg border border-blue-500/30"><Edit2 className="w-3.5 h-3.5" /></button>
                                                 <button onClick={(e) => { e.stopPropagation(); if(confirm('삭제?')) supabase.from('pro_matches').delete().eq('id', m.id).then(()=>fetchData()); }} className="p-1.5 bg-rose-600/20 text-rose-300 rounded-lg border border-rose-500/30"><Trash2 className="w-3.5 h-3.5" /></button>
@@ -550,25 +480,23 @@ export default function ProArchiveMainPage() {
                                             {m.match_name && (
                                                 <span className="bg-yellow-500/10 text-yellow-500 text-[11px] px-2 py-0.5 rounded ml-2 border border-yellow-500/20 shrink-0 uppercase">{m.match_name}</span>
                                             )}
-                                            {!isEnglish && <span className="text-sm text-yellow-500 font-bold ml-3 flex items-center gap-1 shrink-0"><MapPin className="w-3 h-3" /> {m.location}</span>}
-                                            <span className="inline-flex items-center gap-1 text-[11px] text-cyan-400 font-black ml-3 border-l border-white/10 pl-3 shrink-0">
+                                            <span className="text-sm text-yellow-500 font-bold ml-3 flex items-center gap-1"><MapPin className="w-3 h-3" /> {m.location}</span>
+                                            <span className="inline-flex items-center gap-1 text-[11px] text-cyan-400 font-black ml-3 border-l border-white/10 pl-3">
                                                 <Eye className="w-3 h-3" /> {parseStats(m.summary || '').view_count}회
                                             </span>
-                                            <span className="inline-flex items-center gap-1 text-[11px] text-yellow-400 font-black ml-2 shrink-0">
+                                            <span className="inline-flex items-center gap-1 text-[11px] text-yellow-400 font-black ml-2">
                                                 <Clock className="w-3 h-3" /> {formatDuration(parseStats(m.summary || '').view_duration)}
                                             </span>
                                         </h3>
-                                        {!isEnglish && (
-                                            <div className="flex items-center gap-2 text-[15px] font-black tracking-tight w-full">
-                                                <span className="text-sky-400 truncate flex-1 text-right">{m.player_name}{m.partner_name && `/ ${m.partner_name}`}</span>
-                                                <span className="text-white/20 text-[10px] italic shrink-0">VS</span>
-                                                <span className="text-yellow-400 truncate flex-1 text-left">{m.opponent}{m.opponent_2_name && `/ ${m.opponent_2_name}`}</span>
-                                            </div>
-                                        )}
+                                        <div className="flex items-center gap-2 text-[15px] font-black tracking-tight">
+                                            <span className="text-sky-400">{m.player_name}{m.partner_name && `/ ${m.partner_name}`}</span>
+                                            <span className="text-white/20 text-[10px] italic">VS</span>
+                                            <span className="text-yellow-400">{m.opponent}{m.opponent_2_name && `/ ${m.opponent_2_name}`}</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        )})}
+                        ))}
                     </div>
                 </div>
             )}
@@ -831,16 +759,6 @@ function ProArchiveMobileView({
 }: any) {
     const [isPlayerReady, setIsPlayerReady] = useState(false);
     const playerRef = useRef<any>(null);
-    const activeItemRef = useRef<HTMLDivElement | null>(null);
-
-    useEffect(() => {
-        if (activeItemRef.current) {
-            activeItemRef.current.scrollIntoView({
-                behavior: 'smooth',
-                block: 'center'
-            });
-        }
-    }, [activeLoop?.start, sequentialIndex]);
 
     useEffect(() => {
         if (typeof window !== 'undefined' && !window.YT) {
@@ -1003,15 +921,11 @@ function ProArchiveMobileView({
                             const isSelected = selectedLoopIds.has(note.id);
                             
                             return (
-                                <div 
-                                    key={note.id} 
-                                    ref={isActive ? (el => { activeItemRef.current = el; }) : null}
-                                    className={cn(
-                                        "p-2.5 rounded-lg border transition-all flex items-center gap-2 relative overflow-hidden",
-                                        isActive ? (isSequential ? "bg-emerald-600/30 border-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.3)]" : "bg-blue-600/30 border-blue-400 shadow-[0_0_15px_rgba(96,165,250,0.3)]") : 
-                                        "bg-white/[0.02] border-white/5"
-                                    )}
-                                >
+                                <div key={note.id} className={cn(
+                                    "p-2.5 rounded-lg border transition-all flex items-center gap-2 relative overflow-hidden",
+                                    isActive ? (isSequential ? "bg-emerald-600/30 border-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.3)]" : "bg-blue-600/30 border-blue-400 shadow-[0_0_15px_rgba(96,165,250,0.3)]") : 
+                                    "bg-white/[0.02] border-white/5"
+                                )}>
                                     {isActive && (
                                         <div className="absolute left-0 top-0 bottom-0 w-1 bg-current animate-pulse" />
                                     )}

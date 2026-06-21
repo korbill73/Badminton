@@ -184,23 +184,16 @@ const AnalysisMobileView = ({
     sequentialIndex, formatTime, isPlayerReady, setIsPlayerReady, playerRef, rallyLoops,
     currentSet, setCurrentSet, batchSelect, playbackMode
 }: any) => {
-    if (!match) return null;
+    if (!match) return null; // 방어 로직 추가
 
+    const [showControls, setShowControls] = useState(true);
     const [activeFilter, setActiveFilter] = useState('전체');
-    const activeItemRef = useRef<HTMLDivElement | null>(null);
-
-    useEffect(() => {
-        if (activeItemRef.current) {
-            activeItemRef.current.scrollIntoView({
-                behavior: 'smooth',
-                block: 'center'
-            });
-        }
-    }, [activeLoop?.id, sequentialIndex]);
 
     const toggleFullScreen = () => {
         if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen().catch(() => {});
+            document.documentElement.requestFullscreen().catch(err => {
+                console.error(`Error attempting to enable full-screen mode: ${err.message}`);
+            });
         } else {
             if (document.exitFullscreen) document.exitFullscreen();
         }
@@ -208,10 +201,15 @@ const AnalysisMobileView = ({
 
     const onReady = (player: any) => {
         setIsPlayerReady(true);
-        if (playerRef) playerRef.current = player;
+        // CRITICAL: Update the parent's playerRef so the control logic (setInterval) 
+        // in the parent can control this mobile player instance.
+        if (playerRef) {
+            playerRef.current = player;
+        }
     };
 
     const filters = ['전체', '득점', '실점'];
+
     const getFilteredLogs = (filter: string) => {
         if (!logs || !Array.isArray(logs)) return [];
         if (filter === '전체') return logs;
@@ -221,72 +219,97 @@ const AnalysisMobileView = ({
     };
 
     const currentFilteredLogs = getFilteredLogs(activeFilter);
-    const router = useRouter();
 
     return (
         <div className="fixed inset-0 z-[2000] bg-black flex flex-col landscape:flex-row overflow-hidden text-white">
-            {/* Video Area */}
-            <div className="relative flex-shrink-0 bg-black flex items-center justify-center h-[210px] landscape:h-full landscape:flex-1 border-b landscape:border-b-0 landscape:border-r border-white/10">
-                <div className="w-full h-full" onClick={toggleFullScreen}>
+            <div className="flex-1 relative bg-black flex items-center justify-center" onClick={() => setShowControls(!showControls)}>
+                <div className="w-full h-full">
                     <YoutubePlayer videoId={match?.youtube_video_id || ''} onPlayerReady={onReady} />
                 </div>
                 {!isPlayerReady && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-20">
-                        <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+                        <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />
                     </div>
                 )}
-                
-                {/* Controls Overlay - Top Right */}
-                <div className="absolute top-4 right-4 flex gap-2 z-50">
-                    <button onClick={onClose} className="p-2.5 bg-black/60 text-white rounded-full border border-white/20 shadow-2xl backdrop-blur-md active:scale-90 transition-all">
-                        <X className="w-5 h-5" />
-                    </button>
-                    <button onClick={toggleFullScreen} className="p-2.5 bg-black/60 text-white rounded-full border border-white/20 shadow-2xl backdrop-blur-md active:scale-90 transition-all">
+            </div>
+
+            <div className={cn(
+                "hidden portrait:flex absolute top-0 left-0 right-0 p-5 pt-10 items-center justify-between z-40 transition-all duration-500 bg-gradient-to-b from-black/80 to-transparent",
+                !showControls && "opacity-0 -translate-y-4"
+            )}>
+                <div className="flex flex-col">
+                    <h2 className="text-sm font-black text-blue-400 uppercase tracking-widest mb-0.5">{activeFilter === '전체' ? '경기 전체 분석' : `${activeFilter} 집중 분석`}</h2>
+                    <p className="text-[10px] font-black text-white/40 tracking-[0.2em]">MOBILE CINEMA MODE</p>
+                </div>
+                <div className="flex items-center gap-2">
+                    <button onClick={onClose} className="p-2.5 bg-rose-600 text-white rounded-full"><X className="w-5 h-5" /></button>
+                    <button onClick={toggleFullScreen} className="p-2.5 bg-white/10 backdrop-blur-md text-white rounded-full border border-white/20">
                         <Maximize2 className="w-5 h-5" />
                     </button>
                 </div>
             </div>
 
-            {/* Analysis Panel - Width minimized in landscape to maximize video */}
-            <div className="flex-1 flex flex-col bg-[#020617] overflow-hidden landscape:w-[200px] landscape:flex-none">
-                {/* Header Section */}
-                <div className="p-3 bg-[#0f172a] border-b border-white/10 flex flex-col gap-2 shrink-0">
-                    <div className="flex items-center justify-between">
-                        <h3 className="font-black text-[10px] flex items-center gap-1.5 uppercase tracking-tighter text-cyan-400">
-                            <Activity className="w-3.5 h-3.5" /> 분석 타임라인
-                        </h3>
-                        <div className="flex gap-1">
-                            {[1, 2, 3].map(setNum => {
-                                if (setNum === 3 && match?.set_3_start === '00:00') return null;
-                                return (
-                                    <button
-                                        key={setNum}
-                                        onClick={() => { setCurrentSet(setNum); setIsSequential(false); }}
-                                        className={cn(
-                                            "px-2 py-1 rounded-md text-[9px] font-black border transition-all",
-                                            currentSet === setNum ? "bg-cyan-500 text-black border-cyan-400" : "bg-white/5 text-white/40 border-white/10"
-                                        )}
-                                    >
-                                        {setNum}S
-                                    </button>
-                                );
-                            })}
-                        </div>
+            <div className={cn(
+                "z-50 bg-gradient-to-t from-black to-black/80 backdrop-blur-xl border-white/10 transition-all duration-500 transform",
+                "portrait:absolute portrait:bottom-0 portrait:left-0 portrait:right-0 portrait:p-4 portrait:pb-6 portrait:rounded-t-[2.5rem] portrait:border-t",
+                !showControls && "portrait:translate-y-full",
+                "landscape:relative landscape:w-[160px] landscape:h-full landscape:border-l landscape:p-2 landscape:flex landscape:flex-col landscape:gap-2",
+                !showControls && "landscape:translate-x-full"
+            )}>
+                <div className="portrait:absolute portrait:top-2 portrait:left-1/2 portrait:-translate-x-1/2 portrait:w-12 portrait:h-1 portrait:bg-white/10 portrait:rounded-full" />
+                
+                <div className="flex-1 flex flex-col gap-2.5 landscape:gap-1.5 portrait:mt-2">
+                    {/* Landscape Top Actions */}
+                    <div className="hidden landscape:flex items-center justify-between mb-1 px-1">
+                        <button onClick={onClose} className="p-2 bg-rose-600/20 text-rose-500 rounded-lg border border-rose-500/30 active:scale-90 transition-all">
+                            <X className="w-4 h-4" />
+                        </button>
+                        <button onClick={toggleFullScreen} className="p-2 bg-blue-600/20 text-blue-400 rounded-lg border border-blue-500/30 active:scale-90 transition-all">
+                            <Maximize2 className="w-4 h-4" />
+                        </button>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-1">
+                    <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
+                    {[1, 2, 3].map(setNum => {
+                        // 3세트가 00:00이면 2세트에서 끝난 것이므로 표시하지 않음
+                        if (setNum === 3 && match?.set_3_start === '00:00') return null;
+                        
+                        return (
+                            <button
+                                key={setNum}
+                                onClick={() => {
+                                    setCurrentSet(setNum);
+                                    setIsSequential(false);
+                                }}
+                                className={cn(
+                                    "px-5 py-2.5 rounded-2xl text-xs font-black transition-all whitespace-nowrap border shrink-0",
+                                    currentSet === setNum
+                                        ? "bg-cyan-500 text-black border-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.4)]"
+                                        : "bg-white/5 text-white/40 border-white/10 hover:bg-white/10"
+                                )}
+                            >
+                                {setNum}세트
+                            </button>
+                        );
+                    })}
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 landscape:gap-1 w-full">
                         {filters.map((f: string) => {
                             const count = getFilteredLogs(f).length;
                             const isActive = activeFilter === f;
                             return (
                                 <button 
                                     key={f} 
-                                    onClick={() => {
+                                    onClick={(e) => {
+                                        e.stopPropagation();
                                         setActiveFilter(f);
+                                        
+                                        // Update parent selection for automatic transitions
                                         if (f === '전체') batchSelect('all');
                                         else if (f === '득점') batchSelect('wins');
                                         else if (f === '실점') batchSelect('losses');
-                                        
+
                                         const filtered = getFilteredLogs(f);
                                         if (filtered.length > 0) {
                                             setIsSequential(true);
@@ -295,124 +318,77 @@ const AnalysisMobileView = ({
                                         }
                                     }}
                                     className={cn(
-                                        "py-1.5 rounded-lg border transition-all flex flex-col items-center justify-center active:scale-95",
-                                        isActive ? "bg-blue-600 border-blue-400 text-white" : "bg-white/5 border-white/10 text-white/40"
+                                        "py-2 landscape:py-1.5 rounded-xl border transition-all flex items-center justify-center gap-1.5 active:scale-95",
+                                        isActive 
+                                            ? "bg-blue-600 border-blue-400 text-white" 
+                                            : "bg-white/5 border-white/10 text-white/40"
                                     )}
                                 >
-                                    <span className="text-[9px] font-black">{f}</span>
-                                    <span className="text-[8px] opacity-60">{count}</span>
+                                    <span className="text-[11px] landscape:text-[10px] font-black">{f}</span>
+                                    <span className={cn("text-[10px] landscape:text-[8px] font-black", isActive ? "text-blue-200" : "text-white/20")}>{count}</span>
                                 </button>
                             );
                         })}
                     </div>
 
-                    <button 
-                        onClick={() => router.push(`/analysis/report?id=${match.id}`)}
-                        className="w-full py-2 bg-gradient-to-r from-blue-600/40 to-cyan-600/40 hover:from-blue-600 hover:to-cyan-600 text-white rounded-lg border border-white/10 font-black text-[10px] flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg"
-                    >
-                        <BarChart3 className="w-3.5 h-3.5" /> 통계 리포트 보기
-                    </button>
-                </div>
-
-                {/* Sequential Controls */}
-                <div className="p-2 bg-black/40 border-b border-white/10 flex items-center justify-between gap-1.5 shrink-0">
-                    <button 
-                        onClick={() => {
-                            if (currentFilteredLogs.length === 0) return;
-                            const prevIdx = (sequentialIndex - 1 + currentFilteredLogs.length) % currentFilteredLogs.length;
-                            setSequentialIndex(prevIdx);
-                            startRallyLoop(currentFilteredLogs[prevIdx], true);
-                        }}
-                        className="p-2 bg-white/5 rounded-lg border border-white/10 active:scale-95"
-                    >
-                        <ChevronLeft className="w-4 h-4" />
-                    </button>
-                    <button 
-                        onClick={() => {
-                            setIsSequential(!isSequential);
-                            setIsAutoNext(!isSequential ? false : true);
-                        }}
-                        className={cn(
-                            "flex-1 py-2 rounded-lg font-black text-[10px] border transition-all flex items-center justify-center gap-1.5 active:scale-95 shadow-lg",
-                            isSequential 
-                                ? "bg-emerald-600 border-emerald-400 text-white" 
-                                : "bg-amber-600/40 border-amber-500/50 text-amber-400"
-                        )}
-                    >
-                        {isSequential ? <RefreshCcw className="w-3.5 h-3.5 animate-spin-slow" /> : <RotateCcw className="w-3.5 h-3.5" />}
-                        {isSequential ? '전체 반복 재생' : '개별 반복 재생'}
-                    </button>
-                    <button 
-                        onClick={() => {
-                            if (currentFilteredLogs.length === 0) return;
-                            const nextIdx = (sequentialIndex + 1) % currentFilteredLogs.length;
-                            setSequentialIndex(nextIdx);
-                            startRallyLoop(currentFilteredLogs[nextIdx], true);
-                        }}
-                        className="p-2 bg-blue-600/30 rounded-lg border border-blue-400/20 active:scale-95"
-                    >
-                        <ChevronRight className="w-4 h-4" />
-                    </button>
-                </div>
-
-                {/* Log List Area */}
-                <div className="flex-1 overflow-y-auto p-2 space-y-1.5 custom-scrollbar bg-[#020617]">
-                    {currentFilteredLogs.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center h-32 opacity-10">
-                            <Activity className="w-8 h-8" />
-                            <p className="text-[10px] font-black mt-2">데이터 없음</p>
-                        </div>
-                    ) : (
-                        currentFilteredLogs.map((l: any, idx: number) => {
-                            const loop = rallyLoops[l.id];
-                            const isActive = activeLoop?.id === l.id;
-                            
-                            return (
-                                <div 
-                                    key={l.id} 
-                                    ref={isActive ? (el => { activeItemRef.current = el; }) : null}
-                                    onClick={() => { setIsSequential(false); startRallyLoop(l); }}
-                                    className={cn(
-                                        "p-2.5 rounded-xl border transition-all flex items-center justify-between gap-3 relative overflow-hidden active:scale-[0.98]",
-                                        isActive 
-                                            ? "bg-blue-600/30 border-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.3)]" 
-                                            : "bg-white/[0.02] border-white/5"
-                                    )}
-                                >
-                                    {isActive && (
-                                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,1)] animate-pulse" />
-                                    )}
-                                    <div className="flex flex-col flex-1 min-w-0">
-                                        <div className="flex items-center gap-2">
-                                            <span className={cn("text-base font-black tabular-nums tracking-tighter", l.is_my_point ? "text-cyan-400" : "text-rose-500")}>
-                                                {l.current_score}
-                                            </span>
-                                            <span className="text-[10px] font-black text-white/80 truncate uppercase tracking-tight">
-                                                {l.point_type}
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center gap-1.5 mt-0.5">
-                                            <Clock className="w-2.5 h-2.5 text-white/30" />
-                                            <span className="text-[9px] font-black text-white/40 tabular-nums">
-                                                @{formatTime(loop?.start || l.video_timestamp)}
-                                            </span>
-                                            {isActive && (
-                                                <div className="flex gap-0.5 items-end h-2 ml-1">
-                                                    <div className="w-0.5 bg-cyan-400 animate-[music_0.8s_ease-in-out_infinite]" />
-                                                    <div className="w-0.5 bg-cyan-400 animate-[music_0.5s_ease-in-out_infinite]" />
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div className="shrink-0">
-                                        <ChevronRight className={cn("w-4 h-4 transition-all", isActive ? "text-cyan-400" : "text-white/10")} />
-                                    </div>
-                                </div>
-                            );
-                        })
-                    )}
+                    <div className="flex items-center gap-2.5 landscape:gap-1">
+                        <button 
+                            onClick={() => {
+                                if (currentFilteredLogs.length === 0) return;
+                                const prevIdx = (sequentialIndex - 1 + currentFilteredLogs.length) % currentFilteredLogs.length;
+                                setSequentialIndex(prevIdx);
+                                startRallyLoop(currentFilteredLogs[prevIdx], true);
+                            }}
+                            className="p-3 landscape:p-1.5 bg-white/5 rounded-xl border border-white/10 flex-1 flex justify-center active:scale-95"
+                        >
+                            <ChevronLeft className="w-5 h-5 landscape:w-4 h-4" />
+                        </button>
+                        <button 
+                            onClick={() => {
+                                if (isSequential) {
+                                    // If in sequence, switch to individual loop
+                                    setIsSequential(false);
+                                    setIsAutoNext(true);
+                                } else {
+                                    // If in individual loop, switch back to sequence
+                                    setIsSequential(true);
+                                    setIsAutoNext(false);
+                                }
+                            }}
+                            className={cn(
+                                "px-4 py-3 landscape:py-1.5 rounded-xl font-black text-xs landscape:text-[8px] border transition-all flex-[2] flex items-center justify-center gap-2 landscape:gap-1 active:scale-95",
+                                isSequential ? "bg-emerald-600 border-emerald-400 text-white" : "bg-amber-600 border-amber-400 text-white"
+                            )}
+                        >
+                            {isSequential ? <RefreshCcw className="w-4 h-4 landscape:w-3 h-3" /> : <RotateCcw className="w-4 h-4 landscape:w-3 h-3" />}
+                            {isSequential ? '전체 연속' : '현재 반복'}
+                        </button>
+                        <button 
+                            onClick={() => {
+                                if (currentFilteredLogs.length === 0) return;
+                                const nextIdx = (sequentialIndex + 1) % currentFilteredLogs.length;
+                                setSequentialIndex(nextIdx);
+                                startRallyLoop(currentFilteredLogs[nextIdx], true);
+                            }}
+                            className="p-3 landscape:p-1.5 bg-blue-600/30 rounded-xl border border-blue-400/20 flex-1 flex justify-center active:scale-95"
+                        >
+                            <ChevronRight className="w-5 h-5 landscape:w-4 h-4" />
+                        </button>
+                    </div>
                 </div>
             </div>
+
+            <button 
+                onClick={(e) => { e.stopPropagation(); setShowControls(true); }}
+                className={cn(
+                    "absolute z-[60] p-4 bg-blue-600/80 backdrop-blur-md text-white rounded-full shadow-2xl border border-white/20 transition-all duration-500",
+                    "portrait:bottom-6 portrait:left-1/2 portrait:-translate-x-1/2",
+                    "landscape:right-6 landscape:top-1/2 landscape:-translate-y-1/2",
+                    showControls ? "opacity-0 scale-50 pointer-events-none" : "opacity-100 scale-100"
+                )}
+            >
+                <Layers className="w-6 h-6" />
+            </button>
         </div>
     );
 };
@@ -463,7 +439,6 @@ function CockpitAnalysisContent() {
     const [isIndividualLooping, setIsIndividualLooping] = useState(true);
     const [newlyAddedId, setNewlyAddedId] = useState<string | null>(null);
     const [playbackMode, setPlaybackMode] = useState<'all' | 'selection' | 'wins' | 'losses' | 'none'>('none');
-    const [manualRallyStart, setManualRallyStart] = useState<number | null>(null);
     const logListRef = useRef<HTMLDivElement>(null);
     const hasJumpedToStartRef = useRef(false);
     const isMountedRef = useRef(true);
@@ -892,10 +867,7 @@ function CockpitAnalysisContent() {
             let rallyStart = 0;
             const rallyEnd = timestamp;
 
-            if (manualRallyStart !== null) {
-                rallyStart = manualRallyStart;
-                setManualRallyStart(null); // consume it
-            } else if (lastLogTimestamp !== null) {
+            if (lastLogTimestamp !== null) {
                 // 원칙: 이전 점수 기록 후 +10초가 시작점
                 rallyStart = lastLogTimestamp + 10;
             } else {
@@ -1254,29 +1226,6 @@ function CockpitAnalysisContent() {
                         <Clock className="w-3.5 h-3.5" />
                         <span className="text-[10px] font-black uppercase tracking-widest">LOG</span>
                     </button>
-                    
-                    {/* Manual Point A UI */}
-                    <div className="flex items-center gap-2">
-                        {manualRallyStart !== null && (
-                            <div className="px-3 h-8 bg-cyan-500/20 border border-cyan-500/50 text-cyan-400 text-[10px] font-black rounded-xl flex items-center gap-2 shadow-[0_0_15px_rgba(34,211,238,0.2)]">
-                                <span>A구간: {formatTime(manualRallyStart)}</span>
-                                <button onClick={() => setManualRallyStart(null)} className="hover:text-white transition-colors p-0.5"><X className="w-3 h-3"/></button>
-                            </div>
-                        )}
-                        <button 
-                            onClick={() => {
-                                if (playerRef.current) {
-                                    setManualRallyStart(Math.floor(playerRef.current.getCurrentTime()));
-                                }
-                            }}
-                            className="flex items-center gap-2 px-4 h-8 bg-cyan-500/10 hover:bg-cyan-500/30 border border-cyan-500/30 rounded-xl transition-all text-cyan-400"
-                            title="수동으로 A구간(시작점) 마킹"
-                        >
-                            <Target className="w-3.5 h-3.5" />
-                            <span className="text-[10px] font-black uppercase tracking-widest">A구간 마킹</span>
-                        </button>
-                    </div>
-
                     <button onClick={() => setIsCatModalOpen(true)} className="p-2.5 bg-white/5 border border-white/20 rounded-lg text-white hover:bg-cyan-500 transition-all hover:rotate-90 shadow-lg active:scale-90"><Settings2 className="w-4 h-4" /></button>
                 </div>
             </div>
