@@ -432,10 +432,11 @@ export default function TournamentListPage() {
                                                 >
                                                     <div className="absolute left-0 top-0 bottom-0 w-1 md:w-1.5 bg-blue-600 scale-y-0 group-hover:scale-y-100 transition-transform duration-500 origin-center shadow-[0_0_30px_rgba(37,99,235,0.9)]" />
                                                     
-                                                    <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-8 flex-1 relative z-10 min-w-0">
-                                                        <div className="flex items-center gap-4 md:min-w-[300px] flex-1 min-w-0">
+                                                    <div className="relative z-10 w-full">
+                                                        {/* Mobile Layout */}
+                                                        <div className="md:hidden flex items-center gap-4 w-full">
                                                             <div className={cn(
-                                                                "w-12 h-12 md:w-16 md:h-16 shrink-0 rounded-xl md:rounded-[1.8rem] flex items-center justify-center font-black text-xl md:text-2xl italic shadow-2xl transition-all duration-500 group-hover:scale-110", 
+                                                                "w-12 h-12 shrink-0 rounded-xl flex items-center justify-center font-black text-xl italic shadow-2xl transition-all duration-500 group-hover:scale-110", 
                                                                 pWins > oWins 
                                                                     ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 group-hover:bg-emerald-500/20" 
                                                                     : "bg-rose-500/10 text-rose-500 border border-rose-500/20 group-hover:bg-rose-500/20"
@@ -443,7 +444,7 @@ export default function TournamentListPage() {
                                                                 {pWins > oWins ? 'W' : 'L'}
                                                             </div>
                                                             
-                                                            <div className="md:hidden flex-1 flex flex-col gap-1.5">
+                                                            <div className="flex-1 flex flex-col gap-1.5">
                                                                 <div className="flex items-center justify-between">
                                                                     <div className="flex items-center gap-2">
                                                                         <span className="text-2xl font-black text-yellow-400 tabular-nums tracking-tighter">
@@ -480,69 +481,84 @@ export default function TournamentListPage() {
                                                                     </div>
                                                                 </div>
                                                             </div>
-
-                                                            {/* Names Section (PC) - Symmetrical Alignment */}
-                                                            <div className="hidden md:flex flex-row items-center gap-4 xl:gap-6 flex-1 overflow-hidden min-w-0">
-                                                                <div className="flex-1 shrink-0 flex items-center justify-end text-right text-sky-400 group-hover:text-sky-300 transition-colors truncate">
-                                                                    {renderTeamPlayersPC(m.subject_player, m.partner, false)}
-                                                                </div>
-                                                                
-                                                                <div className="flex items-center gap-3 shrink-0">
-                                                                    <div className="h-px w-4 xl:w-6 bg-white/10 group-hover:bg-blue-500/30 transition-all duration-500" />
-                                                                    <span className="text-slate-700 font-black italic text-[10px] uppercase opacity-40">vs</span>
-                                                                    <div className="h-px w-4 xl:w-6 bg-white/10 group-hover:bg-rose-500/30 transition-all duration-500" />
-                                                                </div>
-
-                                                                <div className="flex-1 flex items-center text-yellow-400 group-hover:text-yellow-300 transition-colors truncate">
-                                                                    {renderTeamPlayersPC(m.opponent_1, m.opponent_2, true)}
-                                                                </div>
-                                                            </div>
                                                         </div>
 
-                                                        {/* PC Total Set Score (Large 2:0) */}
-                                                        <div className="hidden md:flex w-16 xl:w-20 justify-center shrink-0">
-                                                            <span className="text-3xl md:text-4xl font-black text-yellow-400 tabular-nums tracking-tighter drop-shadow-[0_0_15px_rgba(250,204,21,0.3)] group-hover:drop-shadow-[0_0_20px_rgba(250,204,21,0.5)] transition-all duration-500">
-                                                                {pWins}:{oWins}
-                                                            </span>
-                                                        </div>
-
-                                                        {/* PC Set-by-set Scores */}
-                                                        <div className="hidden md:flex flex-wrap gap-2 w-48 xl:w-56 justify-center shrink-0">
-                                                            {setsArr.map((s, idx) => (
-                                                                <div key={idx} className={cn(
-                                                                    "px-3 md:px-4 py-1.5 md:py-2 rounded-lg md:rounded-[1.2rem] text-[11px] md:text-[13px] font-black tabular-nums shadow-lg border transition-all duration-500 group-hover:scale-105", 
-                                                                    s.p > s.o 
-                                                                        ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/20 group-hover:bg-yellow-500/20 group-hover:border-yellow-500/40" 
-                                                                        : "bg-white/10 text-slate-200 border-white/10 group-hover:bg-white/20 group-hover:border-white/20"
+                                                        {/* PC Layout - Strict Grid Alignment */}
+                                                        <div className="hidden md:grid grid-cols-[64px_130px_30px_160px_60px_160px_minmax(140px,1fr)_90px] xl:grid-cols-[64px_150px_30px_180px_70px_200px_minmax(160px,1fr)_100px] items-center gap-2 xl:gap-4 w-full">
+                                                            {/* 1. W/L */}
+                                                            <div className="flex items-center justify-center">
+                                                                <div className={cn(
+                                                                    "w-14 h-14 md:w-16 md:h-16 shrink-0 rounded-[1.8rem] flex items-center justify-center font-black text-2xl italic shadow-2xl transition-all duration-500 group-hover:scale-110", 
+                                                                    pWins > oWins 
+                                                                        ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 group-hover:bg-emerald-500/20" 
+                                                                        : "bg-rose-500/10 text-rose-500 border border-rose-500/20 group-hover:bg-rose-500/20"
                                                                 )}>
-                                                                    {s.p}:{s.o}
+                                                                    {pWins > oWins ? 'W' : 'L'}
                                                                 </div>
-                                                            ))}
-                                                        </div>
-                                                    </div>
+                                                            </div>
 
-                                                    <div className="hidden md:flex items-center justify-end gap-2 xl:gap-4 relative z-10 transition-all shrink-0">
-                                                        {/* PC Stats (1 row to save height) */}
-                                                        <div className="flex flex-row items-center justify-center gap-2 px-2 xl:px-4 group-hover:scale-105 transition-transform shrink-0">
-                                                            <div className="flex items-center gap-1.5 text-[10px] xl:text-[11px] font-black text-cyan-400 uppercase tracking-widest whitespace-nowrap bg-cyan-400/10 px-2 xl:px-3 py-1.5 rounded-full border border-cyan-400/20">
-                                                                <Eye className="w-3.5 h-3.5" /> {parseStats(m.feedback_notes).view_count}회
+                                                            {/* 2. Team 1 */}
+                                                            <div className="flex items-center justify-start text-left text-sky-400 group-hover:text-sky-300 transition-colors truncate">
+                                                                {renderTeamPlayersPC(m.subject_player, m.partner, false)}
                                                             </div>
-                                                            <div className="flex items-center gap-1.5 text-[10px] xl:text-[11px] font-black text-yellow-400 uppercase tracking-widest whitespace-nowrap bg-yellow-400/10 px-2 xl:px-3 py-1.5 rounded-full border border-yellow-400/20">
-                                                                <Clock className="w-3.5 h-3.5" /> {formatDuration(parseStats(m.feedback_notes).view_duration)}
+
+                                                            {/* 3. VS */}
+                                                            <div className="flex items-center justify-center shrink-0">
+                                                                <span className="text-slate-700 font-black italic text-[10px] uppercase opacity-40">vs</span>
+                                                            </div>
+
+                                                            {/* 4. Team 2 */}
+                                                            <div className="flex items-center justify-start text-left text-yellow-400 group-hover:text-yellow-300 transition-colors truncate">
+                                                                {renderTeamPlayersPC(m.opponent_1, m.opponent_2, true)}
+                                                            </div>
+
+                                                            {/* 5. Total Score */}
+                                                            <div className="flex items-center justify-start xl:pl-2">
+                                                                <span className="text-3xl md:text-4xl font-black text-yellow-400 tabular-nums tracking-tighter drop-shadow-[0_0_15px_rgba(250,204,21,0.3)] group-hover:drop-shadow-[0_0_20px_rgba(250,204,21,0.5)] transition-all duration-500">
+                                                                    {pWins}:{oWins}
+                                                                </span>
+                                                            </div>
+
+                                                            {/* 6. Set Scores */}
+                                                            <div className="flex flex-wrap items-center gap-2 justify-start">
+                                                                {setsArr.map((s, idx) => (
+                                                                    <div key={idx} className={cn(
+                                                                        "px-3 md:px-4 py-1.5 md:py-2 rounded-lg md:rounded-[1.2rem] text-[11px] md:text-[13px] font-black tabular-nums shadow-lg border transition-all duration-500 group-hover:scale-105", 
+                                                                        s.p > s.o 
+                                                                            ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/20 group-hover:bg-yellow-500/20 group-hover:border-yellow-500/40" 
+                                                                            : "bg-white/10 text-slate-200 border-white/10 group-hover:bg-white/20 group-hover:border-white/20"
+                                                                    )}>
+                                                                        {s.p}:{s.o}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+
+                                                            {/* 7. Stats */}
+                                                            <div className="flex flex-row items-center justify-start gap-2 group-hover:scale-105 transition-transform shrink-0 origin-left">
+                                                                <div className="flex items-center gap-1.5 text-[10px] xl:text-[11px] font-black text-cyan-400 uppercase tracking-widest whitespace-nowrap bg-cyan-400/10 px-2 xl:px-3 py-1.5 rounded-full border border-cyan-400/20">
+                                                                    <Eye className="w-3.5 h-3.5" /> {parseStats(m.feedback_notes).view_count}회
+                                                                </div>
+                                                                <div className="flex items-center gap-1.5 text-[10px] xl:text-[11px] font-black text-yellow-400 uppercase tracking-widest whitespace-nowrap bg-yellow-400/10 px-2 xl:px-3 py-1.5 rounded-full border border-yellow-400/20">
+                                                                    <Clock className="w-3.5 h-3.5" /> {formatDuration(parseStats(m.feedback_notes).view_duration)}
+                                                                </div>
+                                                            </div>
+
+                                                            {/* 8. Buttons */}
+                                                            <div className="flex items-center justify-end gap-2 shrink-0">
+                                                                <button 
+                                                                    onClick={(e) => { e.stopPropagation(); setEditingMatch(m); setModalOpen(true); }}
+                                                                    className="p-3 bg-white/5 hover:bg-blue-600/20 text-slate-400 hover:text-blue-400 rounded-xl transition-all shrink-0"
+                                                                >
+                                                                    <Edit2 className="w-4 h-4" />
+                                                                </button>
+                                                                <button 
+                                                                    onClick={(e) => { e.stopPropagation(); deleteMatch(m.id); }} 
+                                                                    className="p-3 bg-white/5 hover:bg-rose-600/20 text-slate-400 hover:text-rose-400 rounded-xl transition-all shrink-0"
+                                                                >
+                                                                    <Trash2 className="w-4 h-4" />
+                                                                </button>
                                                             </div>
                                                         </div>
-                                                        <button 
-                                                            onClick={(e) => { e.stopPropagation(); setEditingMatch(m); setModalOpen(true); }}
-                                                            className="p-3 bg-white/5 hover:bg-blue-600/20 text-slate-400 hover:text-blue-400 rounded-xl transition-all shrink-0"
-                                                        >
-                                                            <Edit2 className="w-4 h-4" />
-                                                        </button>
-                                                        <button 
-                                                            onClick={(e) => { e.stopPropagation(); deleteMatch(m.id); }} 
-                                                            className="p-3 bg-white/5 hover:bg-rose-600/20 text-slate-400 hover:text-rose-400 rounded-xl transition-all shrink-0"
-                                                        >
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </button>
                                                     </div>
                                                 </div>
                                             );
