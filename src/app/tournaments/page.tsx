@@ -432,8 +432,8 @@ export default function TournamentListPage() {
                                                 >
                                                     <div className="absolute left-0 top-0 bottom-0 w-1 md:w-1.5 bg-blue-600 scale-y-0 group-hover:scale-y-100 transition-transform duration-500 origin-center shadow-[0_0_30px_rgba(37,99,235,0.9)]" />
                                                     
-                                                    <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-10 flex-1 relative z-10">
-                                                        <div className="flex items-center gap-4 md:min-w-[400px] flex-1">
+                                                    <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-8 flex-1 relative z-10 min-w-0">
+                                                        <div className="flex items-center gap-4 md:min-w-[300px] flex-1 min-w-0">
                                                             <div className={cn(
                                                                 "w-12 h-12 md:w-16 md:h-16 shrink-0 rounded-xl md:rounded-[1.8rem] flex items-center justify-center font-black text-xl md:text-2xl italic shadow-2xl transition-all duration-500 group-hover:scale-110", 
                                                                 pWins > oWins 
@@ -482,8 +482,8 @@ export default function TournamentListPage() {
                                                             </div>
 
                                                             {/* Names Section (PC) - Aligned Columns */}
-                                                            <div className="hidden md:flex flex-row items-center gap-6 flex-1 overflow-hidden min-w-0">
-                                                                <div className="w-[200px] xl:w-[260px] shrink-0 flex items-center justify-start text-left text-sky-400 group-hover:text-sky-300 transition-colors truncate">
+                                                            <div className="hidden md:flex flex-row items-center gap-4 xl:gap-6 flex-1 overflow-hidden min-w-0">
+                                                                <div className="w-[140px] xl:w-[200px] shrink-0 flex items-center justify-end text-right text-sky-400 group-hover:text-sky-300 transition-colors truncate">
                                                                     {renderTeamPlayersPC(m.subject_player, m.partner, false)}
                                                                 </div>
                                                                 
@@ -500,14 +500,14 @@ export default function TournamentListPage() {
                                                         </div>
 
                                                         {/* PC Total Set Score (Large 2:0) */}
-                                                        <div className="hidden md:flex w-24 justify-center shrink-0">
+                                                        <div className="hidden md:flex w-16 xl:w-20 justify-center shrink-0">
                                                             <span className="text-3xl md:text-4xl font-black text-yellow-400 tabular-nums tracking-tighter drop-shadow-[0_0_15px_rgba(250,204,21,0.3)] group-hover:drop-shadow-[0_0_20px_rgba(250,204,21,0.5)] transition-all duration-500">
                                                                 {pWins}:{oWins}
                                                             </span>
                                                         </div>
 
                                                         {/* PC Set-by-set Scores */}
-                                                        <div className="hidden md:flex flex-wrap gap-2 md:w-64 justify-center">
+                                                        <div className="hidden md:flex flex-wrap gap-2 w-48 xl:w-56 justify-center shrink-0">
                                                             {setsArr.map((s, idx) => (
                                                                 <div key={idx} className={cn(
                                                                     "px-3 md:px-4 py-1.5 md:py-2 rounded-lg md:rounded-[1.2rem] text-[11px] md:text-[13px] font-black tabular-nums shadow-lg border transition-all duration-500 group-hover:scale-105", 
@@ -521,26 +521,26 @@ export default function TournamentListPage() {
                                                         </div>
                                                     </div>
 
-                                                    <div className="hidden md:flex items-center justify-end gap-3 md:gap-6 relative z-10 transition-all">
-                                                        <div className="flex flex-col items-center justify-center min-w-[100px] px-4 group-hover:scale-105 transition-transform">
-                                                            <div className="flex items-center gap-1.5 text-[11px] font-black text-cyan-400 uppercase tracking-widest whitespace-nowrap bg-cyan-400/10 px-3 py-1 rounded-full border border-cyan-400/20">
+                                                    <div className="hidden md:flex items-center justify-end gap-2 xl:gap-4 relative z-10 transition-all shrink-0">
+                                                        <div className="flex flex-col items-center justify-center min-w-[80px] xl:min-w-[100px] px-2 xl:px-4 group-hover:scale-105 transition-transform">
+                                                            <div className="flex items-center gap-1.5 text-[10px] xl:text-[11px] font-black text-cyan-400 uppercase tracking-widest whitespace-nowrap bg-cyan-400/10 px-2 xl:px-3 py-1 rounded-full border border-cyan-400/20">
                                                                 <Eye className="w-3.5 h-3.5" /> {parseStats(m.feedback_notes).view_count}회
                                                             </div>
-                                                            <div className="flex items-center gap-1.5 text-[11px] font-black text-yellow-400 uppercase tracking-widest whitespace-nowrap mt-2 bg-yellow-400/10 px-3 py-1 rounded-full border border-yellow-400/20">
+                                                            <div className="flex items-center gap-1.5 text-[10px] xl:text-[11px] font-black text-yellow-400 uppercase tracking-widest whitespace-nowrap mt-2 bg-yellow-400/10 px-2 xl:px-3 py-1 rounded-full border border-yellow-400/20">
                                                                 <Clock className="w-3.5 h-3.5" /> {formatDuration(parseStats(m.feedback_notes).view_duration)}
                                                             </div>
                                                         </div>
                                                         <button 
                                                             onClick={(e) => { e.stopPropagation(); setEditingMatch(m); setModalOpen(true); }}
-                                                            className="p-3 md:p-3.5 bg-white/5 hover:bg-blue-600/20 text-slate-400 hover:text-blue-400 rounded-xl md:rounded-2xl transition-all"
+                                                            className="p-3 bg-white/5 hover:bg-blue-600/20 text-slate-400 hover:text-blue-400 rounded-xl transition-all shrink-0"
                                                         >
-                                                            <Edit2 className="w-4 h-4 md:w-5 md:h-5" />
+                                                            <Edit2 className="w-4 h-4" />
                                                         </button>
                                                         <button 
                                                             onClick={(e) => { e.stopPropagation(); deleteMatch(m.id); }} 
-                                                            className="p-3 md:p-3.5 bg-white/5 hover:bg-rose-600/20 text-slate-400 hover:text-rose-400 rounded-xl md:rounded-2xl transition-all"
+                                                            className="p-3 bg-white/5 hover:bg-rose-600/20 text-slate-400 hover:text-rose-400 rounded-xl transition-all shrink-0"
                                                         >
-                                                            <Trash2 className="w-4 h-4 md:w-5 md:h-5" />
+                                                            <Trash2 className="w-4 h-4" />
                                                         </button>
                                                     </div>
                                                 </div>
