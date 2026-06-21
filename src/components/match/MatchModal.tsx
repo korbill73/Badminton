@@ -425,6 +425,33 @@ const MatchModal = ({ isOpen, onClose, tournamentId, match, players: initialPlay
                         </div>
                     </div>
 
+                    {/* Set Scores (Manual) */}
+                    <div className="bg-white/5 border border-white/10 rounded-[1.5rem] p-4 flex flex-col gap-3">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-1">수동 점수 입력 <span className="text-slate-500 normal-case tracking-normal">(※ 분석실에서 득실 기록 시 자동 반영됨)</span></p>
+                        <div className="grid grid-cols-3 gap-4">
+                            {[1, 2, 3].map(s => (
+                                <div key={s} className="bg-slate-900/50 rounded-xl p-3 border border-white/5 flex flex-col items-center gap-2">
+                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{s}세트</span>
+                                    <div className="flex items-center gap-2">
+                                        <input 
+                                            value={formData[`set_${s}_score_player` as keyof typeof formData]}
+                                            onChange={e => setFormData({...formData, [`set_${s}_score_player`]: e.target.value})}
+                                            className="w-12 bg-blue-500/10 text-blue-400 font-black text-center py-1.5 rounded-lg outline-none focus:ring-1 ring-blue-500"
+                                            placeholder="0"
+                                        />
+                                        <span className="text-slate-600 font-black text-xs">:</span>
+                                        <input 
+                                            value={formData[`set_${s}_score_opponent` as keyof typeof formData]}
+                                            onChange={e => setFormData({...formData, [`set_${s}_score_opponent`]: e.target.value})}
+                                            className="w-12 bg-rose-500/10 text-rose-400 font-black text-center py-1.5 rounded-lg outline-none focus:ring-1 ring-rose-500"
+                                            placeholder="0"
+                                        />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
                     {/* Media Control */}
                     <div className="bg-white/5 border border-white/10 rounded-[1.5rem] p-4 flex items-center justify-between gap-6">
                         <div className="flex flex-col gap-1 w-1/3">
