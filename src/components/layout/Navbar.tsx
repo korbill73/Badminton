@@ -22,12 +22,12 @@ export default function Navbar() {
     const pathname = usePathname();
 
     const menuItems = [
-        { name: '경기 기록', icon: Trophy, href: '/tournaments' },
+        { name: '나의 경기', icon: Trophy, href: '/tournaments' },
         { name: '우수 선수 분석', icon: Search, href: '/pro-archive' },
-        { name: '선수 관리', icon: Users2, href: '/players' },
+        { name: '선수 관리', icon: Users2, href: '/players', mobileHide: true },
         { name: '트레이닝 지표', icon: BarChart3, href: '/' },
-        { name: '데이터 백업', icon: Database, href: '/backup' },
-        { name: '시스템 매뉴얼', icon: BookOpen, href: '/guide' }
+        { name: '데이터 백업', icon: Database, href: '/backup', mobileHide: true },
+        { name: '시스템 매뉴얼', icon: BookOpen, href: '/guide', mobileHide: true }
     ];
 
     return (
@@ -53,7 +53,7 @@ export default function Navbar() {
                                 isActive 
                                     ? "bg-white/10 text-white" 
                                     : "text-slate-400 hover:text-white hover:bg-white/5",
-                                item.name === '데이터 백업' && "hidden md:flex"
+                                item.mobileHide && "hidden md:flex"
                             )}
                             title={item.name}
                         >

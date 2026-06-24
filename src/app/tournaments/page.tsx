@@ -303,19 +303,19 @@ export default function TournamentListPage() {
         <div className="min-h-screen bg-[#080d1a] text-white p-4 md:p-8 lg:p-12 font-sans overflow-x-hidden">
             <div className="max-w-[1400px] mx-auto space-y-8 md:space-y-12">
                 
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 md:gap-8 border-b border-white/5 pb-6 md:pb-10">
-                    <div className="space-y-3 md:space-y-4">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 md:gap-8 border-b border-white/5 pb-4 md:pb-8">
+                    <div className="space-y-2 md:space-y-4">
                         <p className="text-[10px] md:text-[11px] font-black text-blue-500 uppercase tracking-[0.4em] opacity-80">Battle Log & Tactical Archive</p>
                         <h1 className="text-4xl md:text-6xl font-black tracking-tighter leading-none text-yellow-400 drop-shadow-[0_0_20px_rgba(250,204,21,0.2)]">전문 경기 기록<span className="text-white">.</span></h1>
                         <p className="text-white/70 font-bold text-sm md:text-lg max-w-2xl leading-relaxed">대회별로 축적된 모든 경기 데이터를 정밀 분석하고 전술 패턴을 관리합니다.</p>
                     </div>
                     
-                    <button onClick={handleNewTournament} className="w-fit md:w-auto px-6 md:px-10 py-3 md:py-5 bg-blue-600 text-white rounded-xl md:rounded-[2rem] font-black flex items-center justify-center gap-2 md:gap-3 hover:bg-blue-500 transition-all shadow-xl shadow-blue-600/20 active:scale-95 text-sm md:text-base">
+                    <button onClick={handleNewTournament} className="w-fit md:w-auto px-6 md:px-10 py-3 md:py-4 bg-blue-600 text-white rounded-xl md:rounded-[2rem] font-black flex items-center justify-center gap-2 md:gap-3 hover:bg-blue-500 transition-all shadow-xl shadow-blue-600/20 active:scale-95 text-sm md:text-base">
                         <Plus className="w-4 h-4 md:w-6 md:h-6" /> 새 대회 등록
                     </button>
                 </div>
 
-                <div className="space-y-12 md:space-y-16">
+                <div className="space-y-6 md:space-y-12">
                     {tournaments.length === 0 ? (
                         <div className="h-[300px] md:h-[400px] bg-white/5 rounded-[2rem] md:rounded-[4rem] border border-dashed border-white/10 flex flex-col items-center justify-center gap-4 md:gap-6 px-4 text-center">
                             <Trophy className="w-12 h-12 md:w-16 md:h-16 text-slate-800" />
@@ -347,12 +347,21 @@ export default function TournamentListPage() {
                                                 <div className="h-12 md:h-16 w-2 md:w-2.5 bg-gradient-to-b from-blue-500 to-cyan-400 rounded-full shrink-0 shadow-[0_0_20px_rgba(59,130,246,0.6)]" />
                                                 <div className="flex flex-col gap-2 md:gap-3">
                                                     <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-10">
-                                                        <h3 
-                                                            className="text-3xl md:text-5xl font-black tracking-tighter text-white hover:text-blue-400 transition-all duration-300 cursor-pointer drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]"
-                                                            onClick={() => { setEditingTournament(t); setTModalOpen(true); }}
-                                                        >
-                                                            {t.name}
-                                                        </h3>
+                                                        <div className="flex items-center gap-4">
+                                                            <h3 
+                                                                className="text-3xl md:text-5xl font-black tracking-tighter text-white hover:text-blue-400 transition-all duration-300 cursor-pointer drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]"
+                                                                onClick={() => { setEditingTournament(t); setTModalOpen(true); }}
+                                                            >
+                                                                {t.name}
+                                                            </h3>
+                                                            <button 
+                                                                onClick={() => { setTargetTId(t.id); setEditingMatch(null); setModalOpen(true); }}
+                                                                className="w-8 h-8 md:w-10 md:h-10 bg-blue-600 hover:bg-blue-500 text-white rounded-full flex items-center justify-center transition-all shadow-lg active:scale-95 shrink-0"
+                                                                title="경기 추가"
+                                                            >
+                                                                <Plus className="w-5 h-5 md:w-6 md:h-6" />
+                                                            </button>
+                                                        </div>
                                                         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm md:text-2xl font-black tracking-tighter">
                                                             <span className="flex items-center gap-2 text-white/70">
                                                                 <Calendar className="w-5 h-5 md:w-7 md:h-7 text-emerald-400" /> {t.start_date || '-'} ~ {t.end_date || '-'}
@@ -362,19 +371,15 @@ export default function TournamentListPage() {
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-2 md:gap-3">
-                                                <button 
-                                                    onClick={() => { setTargetTId(t.id); setEditingMatch(null); setModalOpen(true); }}
-                                                    className="flex-1 md:flex-none px-6 md:px-10 py-3 md:py-5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl md:rounded-[2rem] font-black text-xs md:text-lg flex items-center justify-center gap-2 transition-all border border-blue-400/30 shadow-lg active:scale-95"
-                                                >
-                                                    <Plus className="w-4 h-4 md:w-6 md:h-6" /> 경기 추가
-                                                </button>
-                                                <button 
-                                                    onClick={() => deleteTournament(t.id)}
-                                                    className="p-3 md:p-5 bg-white/5 hover:bg-rose-600/20 text-slate-500 hover:text-rose-500 rounded-xl md:rounded-[2rem] transition-all border border-white/5 hover:border-rose-500/30 active:scale-95"
-                                                    title="대회 삭제"
-                                                >
-                                                    <Trash2 className="w-4 h-4 md:w-6 md:h-6" />
-                                                </button>
+                                                {tMatches.length === 0 && (
+                                                    <button 
+                                                        onClick={() => deleteTournament(t.id)}
+                                                        className="p-3 md:p-5 bg-white/5 hover:bg-rose-600/20 text-slate-500 hover:text-rose-500 rounded-xl md:rounded-[2rem] transition-all border border-white/5 hover:border-rose-500/30 active:scale-95"
+                                                        title="대회 삭제"
+                                                    >
+                                                        <Trash2 className="w-4 h-4 md:w-6 md:h-6" />
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
@@ -423,45 +428,37 @@ export default function TournamentListPage() {
                                                     <div className="relative z-10 w-full">
                                                         {/* Mobile Layout */}
                                                         <div className="md:hidden flex flex-col gap-2 w-full">
-                                                            {/* Row 1: Players & Match Name */}
+                                                            {/* Row 1: Players & Views */}
                                                             <div className="flex items-center justify-between pb-2 border-b border-white/5">
                                                                 <div className="flex items-center gap-2 text-[13px] font-black min-w-0 pr-2">
                                                                     <span className="text-sky-400 truncate">{renderTeamPlayers(m.subject_player, m.partner, false)}</span>
                                                                     <span className="text-white/20 text-[10px] italic shrink-0">vs</span>
                                                                     <span className="text-yellow-400 truncate">{renderTeamPlayers(m.opponent_1, m.opponent_2, true)}</span>
                                                                 </div>
-                                                                <div className="text-[10px] font-bold text-slate-400 whitespace-nowrap shrink-0">
-                                                                    {m.match_name || '매치 기록'}
+                                                                <div className="flex items-center gap-2 text-cyan-400 bg-cyan-400/10 px-2 py-0.5 rounded-full border border-cyan-400/20 font-black text-[10px] shrink-0">
+                                                                    <Eye className="w-2.5 h-2.5" /> {parseStats(m.feedback_notes).view_count}회
                                                                 </div>
                                                             </div>
 
-                                                            {/* Row 2: Score & Stats */}
+                                                            {/* Row 2: Score & Play Time */}
                                                             <div className="flex items-center justify-between pt-0.5">
-                                                                <div className="flex items-center gap-3">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <span className="text-xl font-black text-yellow-400 tabular-nums tracking-tighter">
-                                                                            {pWins}:{oWins}
-                                                                        </span>
-                                                                        <div className="flex gap-1">
-                                                                            {setsArr.map((s, idx) => (
-                                                                                <div key={idx} className={cn(
-                                                                                    "px-1.5 py-0.5 rounded-md text-[10px] font-black tabular-nums border", 
-                                                                                    s.p > s.o ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/20" : "bg-white/5 text-slate-400 border-white/5"
-                                                                                )}>
-                                                                                    {s.p}:{s.o}
-                                                                                </div>
-                                                                            ))}
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="flex items-center gap-2 text-cyan-400 bg-cyan-400/10 px-2 py-0.5 rounded-full border border-cyan-400/20 font-black text-[10px]">
-                                                                        <Eye className="w-2.5 h-2.5" /> {parseStats(m.feedback_notes).view_count}회
-                                                                    </div>
-                                                                    <div className="flex items-center gap-2 text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-full border border-yellow-400/20 font-black text-[10px]">
-                                                                        <Clock className="w-2.5 h-2.5" /> {formatDuration(parseStats(m.feedback_notes).view_duration)}
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="text-xl font-black text-yellow-400 tabular-nums tracking-tighter">
+                                                                        {pWins}:{oWins}
+                                                                    </span>
+                                                                    <div className="flex gap-1">
+                                                                        {setsArr.map((s, idx) => (
+                                                                            <div key={idx} className={cn(
+                                                                                "px-1.5 py-0.5 rounded-md text-[10px] font-black tabular-nums border", 
+                                                                                s.p > s.o ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/20" : "bg-white/5 text-slate-400 border-white/5"
+                                                                            )}>
+                                                                                {s.p}:{s.o}
+                                                                            </div>
+                                                                        ))}
                                                                     </div>
                                                                 </div>
-                                                                <div className="p-1.5 bg-blue-600 text-white rounded-lg shadow-lg active:scale-90 transition-transform shrink-0">
-                                                                    <Play className="w-3.5 h-3.5" />
+                                                                <div className="flex items-center gap-2 text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-full border border-yellow-400/20 font-black text-[10px] shrink-0">
+                                                                    <Clock className="w-2.5 h-2.5" /> {formatDuration(parseStats(m.feedback_notes).view_duration)}
                                                                 </div>
                                                             </div>
                                                         </div>
