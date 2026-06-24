@@ -22,27 +22,26 @@ export default function Navbar() {
     const pathname = usePathname();
 
     const menuItems = [
-        { name: '대시보드', icon: LayoutDashboard, href: '/' },
         { name: '경기 기록', icon: Trophy, href: '/tournaments' },
         { name: '우수 선수 분석', icon: Search, href: '/pro-archive' },
         { name: '선수 관리', icon: Users2, href: '/players' },
-        { name: '트레이닝 지표', icon: BarChart3, href: '/performance' },
+        { name: '트레이닝 지표', icon: BarChart3, href: '/' },
         { name: '데이터 백업', icon: Database, href: '/backup' },
         { name: '시스템 매뉴얼', icon: BookOpen, href: '/guide' }
     ];
 
     return (
-        <header className="h-[64px] bg-[#0b1221] border-b border-white/5 flex items-center px-4 md:px-8 gap-2 md:gap-10 shrink-0 z-[100] sticky top-0 w-full overflow-hidden">
+        <header className="h-[64px] bg-[#0b1221] border-t md:border-t-0 md:border-b border-white/5 flex items-center px-4 md:px-8 gap-2 md:gap-10 shrink-0 z-[100] fixed bottom-0 md:sticky md:top-0 w-full overflow-hidden shadow-[0_-10px_30px_rgba(0,0,0,0.5)] md:shadow-none">
             {/* Logo Section */}
-            <Link href="/" className="flex items-center gap-2 md:gap-3 group shrink-0">
+            <Link href="/" className="hidden md:flex items-center gap-2 md:gap-3 group shrink-0">
                 <div className="w-8 h-8 md:w-9 md:h-9 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/20 group-hover:scale-105 transition-transform">
                     <span className="text-white font-black text-lg md:text-xl italic">B</span>
                 </div>
-                <span className="text-white font-black text-base md:text-lg tracking-tighter hidden sm:block md:block">EliteBadminton</span>
+                <span className="text-white font-black text-base md:text-lg tracking-tighter">EliteBadminton</span>
             </Link>
 
             {/* Main Menu */}
-            <nav className="flex items-center gap-1 md:gap-2 flex-1 justify-center md:justify-start overflow-x-auto no-scrollbar py-2">
+            <nav className="flex items-center justify-around md:justify-start flex-1 overflow-x-auto no-scrollbar py-2 md:gap-2 w-full">
                 {menuItems.map((item) => {
                     const isActive = pathname === item.href || (item.href !== '/' && pathname?.startsWith(item.href));
                     return (
@@ -50,7 +49,7 @@ export default function Navbar() {
                             key={item.name}
                             href={item.href}
                             className={cn(
-                                "flex items-center gap-2 px-3 md:px-5 py-2 rounded-xl text-xs md:text-sm font-bold transition-all shrink-0",
+                                "flex flex-col md:flex-row items-center gap-1 md:gap-2 px-2 md:px-5 py-2 rounded-xl text-[10px] md:text-sm font-bold transition-all shrink-0 flex-1 md:flex-none justify-center",
                                 isActive 
                                     ? "bg-white/10 text-white" 
                                     : "text-slate-400 hover:text-white hover:bg-white/5",
@@ -58,8 +57,8 @@ export default function Navbar() {
                             )}
                             title={item.name}
                         >
-                            <item.icon className={cn("w-4 h-4 md:w-4 md:h-4", isActive ? "text-blue-500" : "text-slate-500")} />
-                            <span className="hidden md:inline">{item.name}</span>
+                            <item.icon className={cn("w-5 h-5 md:w-4 md:h-4", isActive ? "text-blue-500" : "text-slate-500")} />
+                            <span className="md:inline">{item.name}</span>
                         </Link>
                     );
                 })}

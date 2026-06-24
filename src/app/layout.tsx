@@ -35,7 +35,7 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body className={`${inter.variable} antialiased bg-[#080d1a] text-slate-100 overflow-x-hidden`}>
-        <div className="flex flex-col min-h-screen w-full overflow-x-hidden">
+        <div className="flex flex-col min-h-[100dvh] w-full overflow-x-hidden pb-[64px] md:pb-0">
           <Navbar />
           <main className="flex-1 w-full overflow-x-hidden">
             {children}

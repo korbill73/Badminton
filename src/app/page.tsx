@@ -20,6 +20,7 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import PerformancePage from '@/app/performance/page';
 import {
     PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip,
     BarChart, Bar, XAxis as BarXAxis, YAxis as BarYAxis, CartesianGrid, LabelList
@@ -495,6 +496,20 @@ export default function Dashboard() {
                             </p>
                         </div>
                     </div>
+                </div>
+
+                {/* INTEGRATED PERFORMANCE DASHBOARD */}
+                <div className="pt-10 md:pt-20 border-t border-white/10 mt-10 md:mt-20">
+                    <div className="mb-10 flex items-center gap-4 px-4">
+                        <div className="p-3 bg-indigo-600/20 rounded-2xl border border-indigo-500/30">
+                            <Activity className="w-8 h-8 text-indigo-400" />
+                        </div>
+                        <div>
+                            <h2 className="text-3xl md:text-5xl font-black tracking-tighter text-white">트레이닝 지표 통합 분석</h2>
+                            <p className="text-slate-400 font-bold mt-2">최근 30일 데이터 기반 AI 코칭 분석 리포트입니다.</p>
+                        </div>
+                    </div>
+                    <PerformancePage />
                 </div>
 
             </div>

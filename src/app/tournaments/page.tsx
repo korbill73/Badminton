@@ -233,14 +233,14 @@ export default function TournamentListPage() {
     const renderTeamPlayers = (p1: any, p2: any, isOpponent: boolean) => {
         if (!p1) return "미지정";
         const name1 = p1.name;
-        const school1 = getSchool(p1);
+        const school1 = name1 === '박준서' ? '' : getSchool(p1);
         
         if (!p2) {
             return school1 ? `${name1} (${school1})` : name1;
         }
 
         const name2 = p2.name;
-        const school2 = getSchool(p2);
+        const school2 = name2 === '박준서' ? '' : getSchool(p2);
 
         if (school1 && school2 && school1 === school2) {
             return `${name1} / ${name2} (${school1})`;
@@ -354,21 +354,9 @@ export default function TournamentListPage() {
                                                             {t.name}
                                                         </h3>
                                                         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm md:text-2xl font-black tracking-tighter">
-                                                            <span className="flex items-center gap-2 text-yellow-500 drop-shadow-[0_0_15px_rgba(234,179,8,0.4)]">
-                                                                <MapPin className="w-5 h-5 md:w-8 md:h-8" /> {t.location || '미지정'}
-                                                            </span>
-                                                            <span className="hidden md:block w-px h-8 bg-white/10" />
                                                             <span className="flex items-center gap-2 text-white/70">
                                                                 <Calendar className="w-5 h-5 md:w-7 md:h-7 text-emerald-400" /> {t.start_date || '-'} ~ {t.end_date || '-'}
                                                             </span>
-                                                            {t.result && (
-                                                                <>
-                                                                    <span className="hidden md:block w-px h-8 bg-white/10" />
-                                                                    <span className="flex items-center gap-2 text-amber-500 bg-amber-500/5 px-4 py-1.5 rounded-full border border-amber-500/20">
-                                                                        <Trophy className="w-5 h-5 md:w-7 md:h-7" /> {t.result}
-                                                                    </span>
-                                                                </>
-                                                            )}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -434,51 +422,40 @@ export default function TournamentListPage() {
                                                     
                                                     <div className="relative z-10 w-full">
                                                         {/* Mobile Layout */}
-                                                        <div className="md:hidden flex items-center gap-4 w-full">
-                                                            <div className={cn(
-                                                                "w-12 h-12 shrink-0 rounded-xl flex items-center justify-center font-black text-xl italic shadow-2xl transition-all duration-500 group-hover:scale-110", 
-                                                                pWins > oWins 
-                                                                    ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 group-hover:bg-emerald-500/20" 
-                                                                    : "bg-rose-500/10 text-rose-500 border border-rose-500/20 group-hover:bg-rose-500/20"
-                                                            )}>
-                                                                {pWins > oWins ? 'W' : 'L'}
+                                                        <div className="md:hidden flex flex-col gap-1.5 w-full">
+                                                            <div className="flex items-center justify-between">
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="text-2xl font-black text-yellow-400 tabular-nums tracking-tighter">
+                                                                        {pWins}:{oWins}
+                                                                    </span>
+                                                                    <div className="flex gap-1">
+                                                                        {setsArr.map((s, idx) => (
+                                                                            <div key={idx} className={cn(
+                                                                                "px-1.5 py-0.5 rounded-md text-[10px] font-black tabular-nums border", 
+                                                                                s.p > s.o ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/20" : "bg-white/5 text-slate-400 border-white/5"
+                                                                            )}>
+                                                                                {s.p}:{s.o}
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="p-2 bg-blue-600 text-white rounded-lg shadow-lg active:scale-90 transition-transform">
+                                                                    <Play className="w-4 h-4" />
+                                                                </div>
                                                             </div>
-                                                            
-                                                            <div className="flex-1 flex flex-col gap-1.5">
-                                                                <div className="flex items-center justify-between">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <span className="text-2xl font-black text-yellow-400 tabular-nums tracking-tighter">
-                                                                            {pWins}:{oWins}
-                                                                        </span>
-                                                                        <div className="flex gap-1">
-                                                                            {setsArr.map((s, idx) => (
-                                                                                <div key={idx} className={cn(
-                                                                                    "px-1.5 py-0.5 rounded-md text-[10px] font-black tabular-nums border", 
-                                                                                    s.p > s.o ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/20" : "bg-white/5 text-slate-400 border-white/5"
-                                                                                )}>
-                                                                                    {s.p}:{s.o}
-                                                                                </div>
-                                                                            ))}
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="p-2 bg-blue-600 text-white rounded-lg shadow-lg active:scale-90 transition-transform">
-                                                                        <Play className="w-4 h-4" />
-                                                                    </div>
+                                                            {/* Mobile Player Names Section */}
+                                                            <div className="flex items-center gap-2 text-[13px] font-black border-t border-white/5 pt-2">
+                                                                <span className="text-sky-400 truncate">{renderTeamPlayers(m.subject_player, m.partner, false)}</span>
+                                                                <span className="text-white/20 text-[10px] italic">vs</span>
+                                                                <span className="text-yellow-400 truncate">{renderTeamPlayers(m.opponent_1, m.opponent_2, true)}</span>
+                                                            </div>
+                                                            <div className="text-[10px] font-bold text-slate-500 whitespace-normal break-words opacity-80 flex items-center gap-3">
+                                                                <span>{m.match_name || '매치 기록'}</span>
+                                                                <div className="flex items-center gap-2 text-cyan-400 bg-cyan-400/10 px-2 py-0.5 rounded-full border border-cyan-400/20 font-black">
+                                                                    <Eye className="w-2.5 h-2.5" /> {parseStats(m.feedback_notes).view_count}회
                                                                 </div>
-                                                                {/* Mobile Player Names Section */}
-                                                                <div className="flex items-center gap-2 text-[13px] font-black border-t border-white/5 pt-2">
-                                                                    <span className="text-sky-400 truncate max-w-[120px]">{renderTeamPlayers(m.subject_player, m.partner, false)}</span>
-                                                                    <span className="text-white/20 text-[10px] italic">vs</span>
-                                                                    <span className="text-yellow-400 truncate max-w-[120px]">{renderTeamPlayers(m.opponent_1, m.opponent_2, true)}</span>
-                                                                </div>
-                                                                <div className="text-[10px] font-bold text-slate-500 whitespace-normal break-words opacity-80 flex items-center gap-3">
-                                                                    <span>{m.match_name || '매치 기록'}</span>
-                                                                    <div className="flex items-center gap-2 text-cyan-400 bg-cyan-400/10 px-2 py-0.5 rounded-full border border-cyan-400/20 font-black">
-                                                                        <Eye className="w-2.5 h-2.5" /> {parseStats(m.feedback_notes).view_count}회
-                                                                    </div>
-                                                                    <div className="flex items-center gap-2 text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-full border border-yellow-400/20 font-black">
-                                                                        <Clock className="w-2.5 h-2.5" /> {formatDuration(parseStats(m.feedback_notes).view_duration)}
-                                                                    </div>
+                                                                <div className="flex items-center gap-2 text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-full border border-yellow-400/20 font-black">
+                                                                    <Clock className="w-2.5 h-2.5" /> {formatDuration(parseStats(m.feedback_notes).view_duration)}
                                                                 </div>
                                                             </div>
                                                         </div>
