@@ -422,40 +422,46 @@ export default function TournamentListPage() {
                                                     
                                                     <div className="relative z-10 w-full">
                                                         {/* Mobile Layout */}
-                                                        <div className="md:hidden flex flex-col gap-1.5 w-full">
-                                                            <div className="flex items-center justify-between">
-                                                                <div className="flex items-center gap-2">
-                                                                    <span className="text-2xl font-black text-yellow-400 tabular-nums tracking-tighter">
-                                                                        {pWins}:{oWins}
-                                                                    </span>
-                                                                    <div className="flex gap-1">
-                                                                        {setsArr.map((s, idx) => (
-                                                                            <div key={idx} className={cn(
-                                                                                "px-1.5 py-0.5 rounded-md text-[10px] font-black tabular-nums border", 
-                                                                                s.p > s.o ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/20" : "bg-white/5 text-slate-400 border-white/5"
-                                                                            )}>
-                                                                                {s.p}:{s.o}
-                                                                            </div>
-                                                                        ))}
+                                                        <div className="md:hidden flex flex-col gap-2 w-full">
+                                                            {/* Row 1: Players & Match Name */}
+                                                            <div className="flex items-center justify-between pb-2 border-b border-white/5">
+                                                                <div className="flex items-center gap-2 text-[13px] font-black min-w-0 pr-2">
+                                                                    <span className="text-sky-400 truncate">{renderTeamPlayers(m.subject_player, m.partner, false)}</span>
+                                                                    <span className="text-white/20 text-[10px] italic shrink-0">vs</span>
+                                                                    <span className="text-yellow-400 truncate">{renderTeamPlayers(m.opponent_1, m.opponent_2, true)}</span>
+                                                                </div>
+                                                                <div className="text-[10px] font-bold text-slate-400 whitespace-nowrap shrink-0">
+                                                                    {m.match_name || '매치 기록'}
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Row 2: Score & Stats */}
+                                                            <div className="flex items-center justify-between pt-0.5">
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="text-xl font-black text-yellow-400 tabular-nums tracking-tighter">
+                                                                            {pWins}:{oWins}
+                                                                        </span>
+                                                                        <div className="flex gap-1">
+                                                                            {setsArr.map((s, idx) => (
+                                                                                <div key={idx} className={cn(
+                                                                                    "px-1.5 py-0.5 rounded-md text-[10px] font-black tabular-nums border", 
+                                                                                    s.p > s.o ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/20" : "bg-white/5 text-slate-400 border-white/5"
+                                                                                )}>
+                                                                                    {s.p}:{s.o}
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2 text-cyan-400 bg-cyan-400/10 px-2 py-0.5 rounded-full border border-cyan-400/20 font-black text-[10px]">
+                                                                        <Eye className="w-2.5 h-2.5" /> {parseStats(m.feedback_notes).view_count}회
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2 text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-full border border-yellow-400/20 font-black text-[10px]">
+                                                                        <Clock className="w-2.5 h-2.5" /> {formatDuration(parseStats(m.feedback_notes).view_duration)}
                                                                     </div>
                                                                 </div>
-                                                                <div className="p-2 bg-blue-600 text-white rounded-lg shadow-lg active:scale-90 transition-transform">
-                                                                    <Play className="w-4 h-4" />
-                                                                </div>
-                                                            </div>
-                                                            {/* Mobile Player Names Section */}
-                                                            <div className="flex items-center gap-2 text-[13px] font-black border-t border-white/5 pt-2">
-                                                                <span className="text-sky-400 truncate">{renderTeamPlayers(m.subject_player, m.partner, false)}</span>
-                                                                <span className="text-white/20 text-[10px] italic">vs</span>
-                                                                <span className="text-yellow-400 truncate">{renderTeamPlayers(m.opponent_1, m.opponent_2, true)}</span>
-                                                            </div>
-                                                            <div className="text-[10px] font-bold text-slate-500 whitespace-normal break-words opacity-80 flex items-center gap-3">
-                                                                <span>{m.match_name || '매치 기록'}</span>
-                                                                <div className="flex items-center gap-2 text-cyan-400 bg-cyan-400/10 px-2 py-0.5 rounded-full border border-cyan-400/20 font-black">
-                                                                    <Eye className="w-2.5 h-2.5" /> {parseStats(m.feedback_notes).view_count}회
-                                                                </div>
-                                                                <div className="flex items-center gap-2 text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-full border border-yellow-400/20 font-black">
-                                                                    <Clock className="w-2.5 h-2.5" /> {formatDuration(parseStats(m.feedback_notes).view_duration)}
+                                                                <div className="p-1.5 bg-blue-600 text-white rounded-lg shadow-lg active:scale-90 transition-transform shrink-0">
+                                                                    <Play className="w-3.5 h-3.5" />
                                                                 </div>
                                                             </div>
                                                         </div>
