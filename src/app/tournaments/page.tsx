@@ -430,15 +430,17 @@ export default function TournamentListPage() {
                                                         <div className="md:hidden flex flex-col gap-2 w-full">
                                                             {/* Row 1: Players & Views */}
                                                             <div className="flex items-center justify-between pb-2 border-b border-white/5">
-                                                                <div className="flex items-center gap-2 text-[13px] font-black min-w-0 pr-2 flex-1">
-                                                                    <span className="text-sky-400 truncate">{renderTeamPlayers(m.subject_player, m.partner, false)}</span>
-                                                                    <span className="text-white/20 text-[10px] italic shrink-0">vs</span>
-                                                                    <span className="text-yellow-400 truncate">{renderTeamPlayers(m.opponent_1, m.opponent_2, true)}</span>
+                                                                <div className="flex flex-col gap-0.5 pr-2 flex-1 min-w-0 justify-center">
                                                                     {m.match_name && (
-                                                                        <span className="ml-0.5 text-[9px] font-bold text-slate-400 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded text-center shrink-0 whitespace-nowrap max-w-[80px] overflow-hidden text-ellipsis">
+                                                                        <span className="text-[10px] font-bold text-slate-400 truncate">
                                                                             {m.match_name}
                                                                         </span>
                                                                     )}
+                                                                    <div className="flex items-center gap-2 text-[13px] font-black min-w-0">
+                                                                        <span className="text-sky-400 truncate">{renderTeamPlayers(m.subject_player, m.partner, false)}</span>
+                                                                        <span className="text-white/20 text-[10px] italic shrink-0">vs</span>
+                                                                        <span className="text-yellow-400 truncate">{renderTeamPlayers(m.opponent_1, m.opponent_2, true)}</span>
+                                                                    </div>
                                                                 </div>
                                                                 <div className="flex items-center gap-2 text-cyan-400 bg-cyan-400/10 px-2 py-0.5 rounded-full border border-cyan-400/20 font-black text-[10px] shrink-0">
                                                                     <Eye className="w-2.5 h-2.5" /> {parseStats(m.feedback_notes).view_count}회
@@ -482,24 +484,24 @@ export default function TournamentListPage() {
                                                                 </div>
                                                             </div>
 
-                                                            {/* 2. Team 1 */}
-                                                            <div className="flex items-center justify-start text-left text-sky-400 group-hover:text-sky-300 transition-colors truncate">
-                                                                {renderTeamPlayersPC(m.subject_player, m.partner, false)}
-                                                            </div>
-
-                                                            {/* 3. VS */}
-                                                            <div className="flex items-center justify-center shrink-0">
-                                                                <span className="text-slate-700 font-black italic text-[10px] uppercase opacity-40">vs</span>
-                                                            </div>
-
-                                                            {/* 4. Team 2 */}
-                                                            <div className="flex items-center justify-start text-left text-yellow-400 group-hover:text-yellow-300 transition-colors truncate gap-3">
-                                                                <span className="truncate">{renderTeamPlayersPC(m.opponent_1, m.opponent_2, true)}</span>
+                                                            {/* 2-4. Teams and Match Name */}
+                                                            <div className="col-span-3 flex flex-col justify-center min-w-0 text-left">
                                                                 {m.match_name && (
-                                                                    <span className="text-[11px] font-bold text-slate-400 bg-white/5 border border-white/10 px-2 py-0.5 rounded-md shrink-0 whitespace-nowrap">
+                                                                    <span className="text-[11px] font-bold text-slate-400 mb-0.5 truncate">
                                                                         {m.match_name}
                                                                     </span>
                                                                 )}
+                                                                <div className="flex items-center gap-3 min-w-0">
+                                                                    <div className="text-sky-400 group-hover:text-sky-300 transition-colors truncate">
+                                                                        {renderTeamPlayersPC(m.subject_player, m.partner, false)}
+                                                                    </div>
+                                                                    <div className="shrink-0 text-slate-700 font-black italic text-[10px] uppercase opacity-40">
+                                                                        vs
+                                                                    </div>
+                                                                    <div className="text-yellow-400 group-hover:text-yellow-300 transition-colors truncate">
+                                                                        {renderTeamPlayersPC(m.opponent_1, m.opponent_2, true)}
+                                                                    </div>
+                                                                </div>
                                                             </div>
 
                                                             {/* 5. Total Score */}
