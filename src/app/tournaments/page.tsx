@@ -430,10 +430,15 @@ export default function TournamentListPage() {
                                                         <div className="md:hidden flex flex-col gap-2 w-full">
                                                             {/* Row 1: Players & Views */}
                                                             <div className="flex items-center justify-between pb-2 border-b border-white/5">
-                                                                <div className="flex items-center gap-2 text-[13px] font-black min-w-0 pr-2">
+                                                                <div className="flex items-center gap-2 text-[13px] font-black min-w-0 pr-2 flex-1">
                                                                     <span className="text-sky-400 truncate">{renderTeamPlayers(m.subject_player, m.partner, false)}</span>
                                                                     <span className="text-white/20 text-[10px] italic shrink-0">vs</span>
                                                                     <span className="text-yellow-400 truncate">{renderTeamPlayers(m.opponent_1, m.opponent_2, true)}</span>
+                                                                    {m.match_name && (
+                                                                        <span className="ml-0.5 text-[9px] font-bold text-slate-400 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded text-center shrink-0 whitespace-nowrap max-w-[80px] overflow-hidden text-ellipsis">
+                                                                            {m.match_name}
+                                                                        </span>
+                                                                    )}
                                                                 </div>
                                                                 <div className="flex items-center gap-2 text-cyan-400 bg-cyan-400/10 px-2 py-0.5 rounded-full border border-cyan-400/20 font-black text-[10px] shrink-0">
                                                                     <Eye className="w-2.5 h-2.5" /> {parseStats(m.feedback_notes).view_count}회
@@ -488,8 +493,13 @@ export default function TournamentListPage() {
                                                             </div>
 
                                                             {/* 4. Team 2 */}
-                                                            <div className="flex items-center justify-start text-left text-yellow-400 group-hover:text-yellow-300 transition-colors truncate">
-                                                                {renderTeamPlayersPC(m.opponent_1, m.opponent_2, true)}
+                                                            <div className="flex items-center justify-start text-left text-yellow-400 group-hover:text-yellow-300 transition-colors truncate gap-3">
+                                                                <span className="truncate">{renderTeamPlayersPC(m.opponent_1, m.opponent_2, true)}</span>
+                                                                {m.match_name && (
+                                                                    <span className="text-[11px] font-bold text-slate-400 bg-white/5 border border-white/10 px-2 py-0.5 rounded-md shrink-0 whitespace-nowrap">
+                                                                        {m.match_name}
+                                                                    </span>
+                                                                )}
                                                             </div>
 
                                                             {/* 5. Total Score */}
