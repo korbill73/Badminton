@@ -12,6 +12,16 @@ import { cn } from '@/lib/utils';
 import ProTournamentModal from '@/components/pro/ProTournamentModal';
 import ProMatchModal from '@/components/pro/ProMatchModal';
 
+const extractProYoutubeId = (url: string) => {
+    if (!url) return '';
+    if (url.length === 11 && !url.includes('/') && !url.includes('?')) return url;
+    const shortsMatch = url.match(/shorts\/([a-zA-Z0-9_-]{11})/);
+    if (shortsMatch && shortsMatch[1]) return shortsMatch[1];
+    const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=|live\/)|youtu\.be\/)([^"&?\/\s]{11})/;
+    const match = url.match(regex);
+    return match ? match[1] : (url.includes('v=') ? url.split('v=')[1].split('&')[0] : url);
+};
+
 export default function ProPlayerDetailPage({ params }: { params: { id: string } }) {
     const [player, setPlayer] = useState<any>(null);
     const [groupedMatches, setGroupedMatches] = useState<Record<string, any[]>>({});
@@ -282,7 +292,7 @@ export default function ProPlayerDetailPage({ params }: { params: { id: string }
                             <div className="lg:col-span-2 space-y-12">
                                 <div className="aspect-video bg-black rounded-[4rem] border border-white/10 overflow-hidden shadow-[0_0_120px_rgba(59,130,246,0.15)] relative">
                                     <iframe 
-                                        src={`https://www.youtube.com/embed/${studyMatch.video_url?.includes('v=') ? studyMatch.video_url.split('v=')[1].split('&')[0] : studyMatch.video_url}`}
+                                        src={`https://www.youtube.com/embed/${extractProYoutubeId(studyMatch.video_url)}`}
                                         className="w-full h-full border-none"
                                         allowFullScreen
                                     />

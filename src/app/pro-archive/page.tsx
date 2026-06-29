@@ -32,6 +32,16 @@ const parseTimeToSeconds = (t: any) => {
     return (m || 0) * 60 + (sec || 0);
 };
 
+const extractProYoutubeId = (url: string) => {
+    if (!url) return '';
+    if (url.length === 11 && !url.includes('/') && !url.includes('?')) return url;
+    const shortsMatch = url.match(/shorts\/([a-zA-Z0-9_-]{11})/);
+    if (shortsMatch && shortsMatch[1]) return shortsMatch[1];
+    const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=|live\/)|youtu\.be\/)([^"&?\/\s]{11})/;
+    const match = url.match(regex);
+    return match ? match[1] : (url.includes('v=') ? url.split('v=')[1].split('&')[0] : url);
+};
+
 export default function ProArchiveMainPage() {
     const [matches, setMatches] = useState<any[]>([]);
     const [bdPlayers, setBdPlayers] = useState<any[]>([]);
@@ -159,7 +169,7 @@ export default function ProArchiveMainPage() {
 
     useEffect(() => {
         if (studyMatch && window.YT) {
-            const vidId = studyMatch.video_url?.includes('v=') ? studyMatch.video_url.split('v=')[1].split('&')[0] : studyMatch.video_url;
+            const vidId = extractProYoutubeId(studyMatch.video_url);
             const initPlayer = () => {
                 new window.YT.Player('pro-video-player', {
                     videoId: vidId,
@@ -238,7 +248,7 @@ export default function ProArchiveMainPage() {
     useEffect(() => {
         if (loopA !== null && loopB !== null && studyMatch && (studyMatch.category === '영어 반복' || selectedCategory === '영어 반복') && !editingNote) {
             const fetchAndSetSubtitle = async () => {
-                const vidId = studyMatch.video_url?.includes('v=') ? studyMatch.video_url.split('v=')[1].split('&')[0] : studyMatch.video_url;
+                const vidId = extractProYoutubeId(studyMatch.video_url);
                 if (!vidId) return;
                 try {
                     const res = await fetch(`/api/transcript?videoId=${vidId}`);
