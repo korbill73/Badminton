@@ -13,6 +13,9 @@ import { cn } from '@/lib/utils';
 // Helper to extract YouTube ID
 const extractYoutubeId = (url: string) => {
     if (!url) return '';
+    const shortsMatch = url.match(/shorts\/([a-zA-Z0-9_-]{11})/);
+    if (shortsMatch && shortsMatch[1]) return shortsMatch[1];
+    
     const regExp = /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/;
     const match = url.match(regExp);
     return (match && match[7].length === 11) ? match[7] : url;

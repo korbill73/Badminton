@@ -18,6 +18,10 @@ function extractVideoId(input: string): string {
     // 이미 11자리 ID인 경우 처리
     if (input.length === 11 && !input.includes('/') && !input.includes('?')) return input;
 
+    // Shorts 처리
+    const shortsMatch = input.match(/shorts\/([a-zA-Z0-9_-]{11})/);
+    if (shortsMatch && shortsMatch[1]) return shortsMatch[1];
+
     const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=|live\/)|youtu\.be\/)([^"&?\/\s]{11})/;
     const match = input.match(regex);
     return match ? match[1] : input;
