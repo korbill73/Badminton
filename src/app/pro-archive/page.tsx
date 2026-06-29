@@ -863,9 +863,7 @@ function ProArchiveMobileView({
         const initPlayer = () => {
             if (playerRef.current) playerRef.current.destroy();
             
-            const videoId = studyMatch.video_url.includes('v=') 
-                ? studyMatch.video_url.split('v=')[1].split('&')[0]
-                : studyMatch.video_url.split('/').pop();
+            const videoId = extractProYoutubeId(studyMatch.video_url);
 
             playerRef.current = new window.YT.Player('youtube-player-mobile', {
                 height: '100%',
